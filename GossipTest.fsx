@@ -13,7 +13,7 @@ let numOfNodes=10
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="2d grid"
+let topology="imperfect 2d grid"
 let algo = "gossip"
 let mutable actorRef = select "akka://MySystem/user/" system
 
@@ -70,7 +70,17 @@ let Actor i j (mailbox: Actor<_>) =
             if ((i+1) <= (numOfNodes*numOfNodes) && (((i+1)%numOfNodes)<>1))  then
                 neighbors <- [i+1] |> List.append neighbors
 
-
+        | "imperfect 2d grid"->
+            if (i+numOfNodes) <= (numOfNodes*numOfNodes) then
+                neighbors <- [i+numOfNodes] |> List.append neighbors
+            if (i-numOfNodes) > 0 then
+                neighbors <- [i-numOfNodes] |> List.append neighbors
+            if ((i-1) > 0 && (i-1)%numOfNodes<>0) then
+                neighbors <- [i-1] |> List.append neighbors
+            if ((i+1) <= (numOfNodes*numOfNodes) && (((i+1)%numOfNodes)<>1))  then
+                neighbors <- [i+1] |> List.append neighbors
+            
+            neighbors <- [rand.Next()%(numOfNodes*numOfNodes)] |> List.append neighbors
         | _ -> ()
     
 
@@ -102,7 +112,7 @@ let Actor i j (mailbox: Actor<_>) =
                 } |> Async.StartImmediate 
 
                 return! loop ()
-
+        | 2 -> 
         | _ -> 
             printfn "HERE"
         
@@ -165,6 +175,23 @@ let Master i j (mailbox: Actor<_>) =
                 ()
                // printfn "%i Actor Created" i
     |"2d grid"->
+        for i= 1 to numOfNodes do
+            for j=1 to numOfNodes do
+                actorID<-actorID+1
+                let actorName = string actorID
+                printfn "%i Actor Created" actorID
+                match algo with
+                |"gossip"-> 
+                    actorRef <-
+                        Actor actorID algo
+                        |> spawn system actorName
+                    printfn "%i Actor Created" i
+
+                |"push sum"->
+                    actorRef <-
+                        Actor actorID algo
+                        |> spawn system actorName
+    |"imperfect 2d grid"->
         for i= 1 to numOfNodes do
             for j=1 to numOfNodes do
                 actorID<-actorID+1
