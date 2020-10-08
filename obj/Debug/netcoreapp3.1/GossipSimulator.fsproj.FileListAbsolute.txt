@@ -1,0 +1,3 @@
+/Users/uditjaitly/Desktop/f#/GossipSimulator/obj/Debug/netcoreapp3.1/GossipSimulator.fsprojAssemblyReference.cache
+/Users/uditjaitly/Desktop/f#/GossipSimulator/obj/Debug/netcoreapp3.1/GossipSimulator.AssemblyInfoInputs.cache
+/Users/uditjaitly/Desktop/f#/GossipSimulator/obj/Debug/netcoreapp3.1/GossipSimulator.AssemblyInfo.fs

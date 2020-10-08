@@ -9,17 +9,40 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=1000
+let numOfNodes=100
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="line"
+let topology="full"
 let algo = "gossip"
+let mutable actorRef = select "akka://MySystem/user/" system
+
+
+let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int)  =
+    let mutable index=(rand.Next()%numberOfNeighbors)
+    let mutable randomNum=neighbors.[index]
+    //printfn "random num=%i" randomNum
+    while index = 0 || randomNum =i || randomNum=0 do
+        index<-(rand.Next()%numberOfNeighbors)
+        randomNum<-neighbors.[index]
+
+
+    //randomNum<-neighbors.[randomNum]
+    //printfn "%i Sending to %i" i randomNum
+    let num_string= string randomNum
+    let pathToActor="akka://MySystem/user/" + num_string
+    //printfn "%s" pathToActor
+    actorRef <- select pathToActor system
+    actorRef<! 1
+()
+
+
 
 let Actor i j (mailbox: Actor<_>) =
     let mutable counter=0
-    let mutable actorRef = select "akka://MySystem/user/" system
+    let mutable proceed=true
     let mutable neighbors = []
+    let mutable numberOfNeighbors=0
     neighbors <- [-1] |> List.append neighbors
     //printfn "i=%i" i
     match topology with
@@ -50,41 +73,46 @@ let Actor i j (mailbox: Actor<_>) =
 
         | _ -> ()
     
+
+
+
     let numberOfNeighbors= neighbors.Length
+    
+    
+    
+
+
 
     let rec loop n = actor {
         let! message = mailbox.Receive()
         let sender = mailbox.Sender()
-        let mutable index=(rand.Next()%numberOfNeighbors)
-        let mutable randomNum=neighbors.[index]
-        //printfn "random num=%i" randomNum
-        while index = 0 || randomNum =i || randomNum=0 do
-            index<-(rand.Next()%numberOfNeighbors)
-            randomNum<-neighbors.[index]
+        
 
-
-        //randomNum<-neighbors.[randomNum]
-        //printfn "%i Sending to %i" i randomNum
-        let num_string= string randomNum
-        let pathToActor="akka://MySystem/user/" + num_string
-        printfn "%s" pathToActor
-        actorRef <- select pathToActor system
-        actorRef<! 1
         match message with
         | 1 ->
+            //printfn "HEREEE"
             counter<-counter+1
             if counter = 10 then
-                printf "Counter is 10 for %i" i
-            k<-k+1
+                proceed<-false
+                printfn "Counter is 10 for %i" i
+                k<-k+1
             if counter < 10 then
-                return! loop ()
-            
+                let timer = new Timers.Timer(10.)
+                let event= Async.AwaitEvent(timer.Elapsed)|> Async.Ignore
+                pickNeighbor (neighbors,numberOfNeighbors,i)
+                timer.Start()
+                while proceed do
+                    Async.RunSynchronously event
+                    pickNeighbor (neighbors,numberOfNeighbors,i)
+                    return! loop ()
+
         | _ ->
             printfn "HERE"
-
-        //sender <! 1
+        
     }
     loop ()
+
+
 
 
 
