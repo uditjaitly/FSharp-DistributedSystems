@@ -101,7 +101,9 @@ let Actor i j (mailbox: Actor<_>) =
 
     let numberOfNeighbors= neighbors.Length
     
-    
+    let ss= string i
+    let p="akka://MySystem/user/" + ss
+    let selfRef= select p system
     
     
 
@@ -115,24 +117,19 @@ let Actor i j (mailbox: Actor<_>) =
             counter<-counter+1
             if counter = 10 then
                 proceed<-false
-                printfn "Counter is 10 for %i" i
+                //printfn "Counter is 10 for %i" i
                 k<-k+1
                 bossRef<! (1.0,1.0)
-            if counter = 1 then
-                async {
-                    while proceed do
-                        do! Async.Sleep 0
-                        pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
-                } |> Async.StartImmediate
-
+            if counter =1  then
+                selfRef<! (1.0,1.0)
             return! loop ()
-
-
-
-
-
-
-
+        | (1.0,1.0) ->
+            async{
+                while proceed do
+                    do! Async.Sleep 1
+                    pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+                } |> Async.StartImmediate
+            return! loop()
 
         | (a,b) ->
             s<-s+a
@@ -264,7 +261,7 @@ let Master i j (mailbox: Actor<_>) =
                     let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
-                    randomActor <! (-1.0,-1.0)
+                    randomActor <! (float (num_string),1.0)
                  
 
                 |"push sum"->
@@ -294,7 +291,7 @@ let Master i j (mailbox: Actor<_>) =
                     let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
-                    randomActor <! (-1.0,-1.0)
+                    randomActor <! (float (num_string),1.0)
                  
 
                 |"push sum"->
@@ -323,7 +320,7 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (1.0,1.0) -> 
                 inc<-inc+1 
-                if(inc>300) then
+                if(inc>800) then
                     b.Stop()
                     printfn "%f" b.Elapsed.TotalMilliseconds
 
@@ -342,4 +339,3 @@ let boss =
 
 
 printf "value of k=%i" k
-printf "value of c=%i" inc
