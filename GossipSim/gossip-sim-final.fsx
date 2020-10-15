@@ -28,7 +28,7 @@ let checkCounter =
 let mutable selfLimit=500
 let mutable proceed1=true
 
-let mutable pendingActors= [1..1]
+let mutable pendingActors= [1..numOfNodes]
 
 type Values={Values : List<decimal>}
 
@@ -48,16 +48,17 @@ let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : decimal
     let mutable flag=0
     let mutable freeNeighbors=[]
     //printfn "random num=%i" randomNum
-    if topology = "full" & algo = "gossip" then
-        randomNum<-(rand.Next()%numOfNodes)
-    else
-        while index = 0 || randomNum =i || randomNum=0 do
-            index<-(rand.Next()%numberOfNeighbors)
-            randomNum<-neighbors.[index]
+    if topology = "full" then 
+        if topology = "full" & algo = "gossip" then
+            randomNum<-(rand.Next()%numOfNodes)
+        else
+            while index = 0 || randomNum =i || randomNum=0 do
+                index<-(rand.Next()%numberOfNeighbors)
+                randomNum<-neighbors.[index]
 
-    num_string<- string randomNum
-    pathToActor<-"akka://MySystem/user/" + num_string
-    actorRef <- select pathToActor system
+        num_string<- string randomNum
+        pathToActor<-"akka://MySystem/user/" + num_string
+        actorRef <- select pathToActor system
     if algo = "gossip" then
         actorRef<! Gossip "This is a very hot rumor"
     else if algo = "push-sum" && topology <> "full" then
@@ -107,7 +108,7 @@ let Actor i j (mailbox: Actor<_>) =
     //printfn "i=%i" i
     match topology with
         | "full"->
-            for x = 1 to 2 do
+            for x = 1 to numOfNodes do
                 if x <> i then
                     neighbors <- [x] |> List.append neighbors
         | "line"->
