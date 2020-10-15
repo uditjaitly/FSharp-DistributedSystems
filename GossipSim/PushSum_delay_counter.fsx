@@ -9,19 +9,19 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=1000
+let numOfNodes=10
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
 let topology="full"
-let algo = "gossip"
+let algo = "push sum"
 let mutable actorRef = select "akka://MySystem/user/" system
 let round (x:float,d:float) =
     let rounded = Math.Round(d)
     if rounded < x then x + Math.Pow(10.0,-d) else rounded
 let bossRef= select "akka://MySystem/user/master" system
 let mutable c=0
-let mutable b= System.DateTime.Now
+let mutable b=System.Diagnostics.Stopwatch.StartNew()
 let checkCounter = 
     if c >8 then
         printf "done"
@@ -34,7 +34,7 @@ let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w
     while index = 0 || randomNum =i || randomNum=0 do
         index<-(rand.Next()%numberOfNeighbors)
         randomNum<-neighbors.[index]
-
+    
 
     //randomNum<-neighbors.[randomNum]
     //printfn "%i Sending to %i" i randomNum
@@ -60,6 +60,7 @@ let Actor i j (mailbox: Actor<_>) =
     let mutable lastRatio= float -1
     let mutable currentRatio= float 1
     let mutable roundCounter=0
+    let mutable selfGossipCounter=0
     neighbors <- [-1] |> List.append neighbors
     //printfn "i=%i" i
     match topology with
@@ -123,30 +124,23 @@ let Actor i j (mailbox: Actor<_>) =
             counter<-counter+1
             if counter = 10 then
                 proceed<-false
-                //printfn "Counter is 10 for %i" i
                 k<-k+1
-               // printf "%A" sender
+                //printfn "completed actor %i" i
                 bossRef<! (-1,-1)
-                system.Stop(sender)
             else if counter = 1 then
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 selfRef<!(1.0,1.0)
-            else
-                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
             return! loop ()
             
 
             
         | (1.0,1.0) ->
-            if counter<10 then 
+            selfGossipCounter<-selfGossipCounter+1
+            if selfGossipCounter = 1000 then
+                selfGossipCounter<-0
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
-                if counter <10 then 
-                    selfRef<!(1.0,1.0)
-              
-                
-            if counter>=10 then
-                system.Stop(sender)
 
+            selfRef<!(1.0,1.0)
             return! loop()
             
 
@@ -158,6 +152,8 @@ let Actor i j (mailbox: Actor<_>) =
             currentRatio<-s/w
             currentRatio<-System.Math.Round (currentRatio,10)
             if lastRatio = currentRatio then
+                k<-k+1
+                printfn "CURR=LAST FOR ACTOR=%i" i
                 printfn "%fLAST RATIO=" lastRatio
                 roundCounter<-roundCounter+1
                 if(roundCounter<3) then
@@ -167,11 +163,13 @@ let Actor i j (mailbox: Actor<_>) =
                     pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
                     return! loop()
                 if roundCounter = 3 then
+                    c<-c+1
                     printf "DONE"
                     sender <! "DONE"
+                    pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
+                    return! loop()
+
             else
-                
-                //k<-k+1
                 lastRatio<-currentRatio
                 lastRatio<-System.Math.Round (lastRatio,10)
                 pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
@@ -217,7 +215,8 @@ let Master i j (mailbox: Actor<_>) =
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! (-1.0,-1.0)
-                b<-System.DateTime.Now
+                b<-System.Diagnostics.Stopwatch.StartNew()
+
 
 
             |"push sum"->
@@ -246,7 +245,8 @@ let Master i j (mailbox: Actor<_>) =
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! (-1.0,-1.0)
-                b<-System.DateTime.Now
+                b<-System.Diagnostics.Stopwatch.StartNew()
+
 
 
 
@@ -336,8 +336,10 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (-1,-1) -> 
                 c<-c+1
-                if c>=999 then
-                    printf "%A" (b-System.DateTime.Now)
+                if c>=1000 then
+                    b.Stop()
+
+                    printf "%A" (b.ElapsedMilliseconds)
                     printf "Done"
 
 
@@ -357,4 +359,4 @@ printf "%A" boss
 
 
 printf "value of k=%i" k
-        printf "value of c=%i" c
+printf "value of c=%i" c

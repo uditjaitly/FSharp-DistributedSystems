@@ -27,25 +27,35 @@ let checkCounter =
         printf "done"
 
 
+let mutable tempList=[1..1000]
+let mutable pendingActors= -1::tempList
+
+
+
+
+
 let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w : float)  =
     let mutable index=(rand.Next()%numberOfNeighbors)
     let mutable randomNum=neighbors.[index]
-    //printfn "random num=%i" randomNum
+    let mutable num_string = string randomNum
+    let mutable pathToActor="akka://MySystem/user/" + num_string
     while index = 0 || randomNum =i || randomNum=0 do
         index<-(rand.Next()%numberOfNeighbors)
         randomNum<-neighbors.[index]
 
+   
+    num_string<- string randomNum
+    pathToActor<-"akka://MySystem/user/" + num_string
+        //printfn "%s" pathToActor
+        
 
-    //randomNum<-neighbors.[randomNum]
-    //printfn "%i Sending to %i" i randomNum
-    let num_string= string randomNum
-    let pathToActor="akka://MySystem/user/" + num_string
-    //printfn "%s" pathToActor
     actorRef <- select pathToActor system
     if algo = "gossip" then
         actorRef<! (-1.0,-1.0)
     else if algo = "push sum" then
         actorRef<! (s,w)
+
+    
 ()
 
 
@@ -125,8 +135,9 @@ let Actor i j (mailbox: Actor<_>) =
                 proceed<-false
                 //printfn "Counter is 10 for %i" i
                 k<-k+1
-               // printf "%A" sender
+                //pendingActors<-pendingActors |> List.filter ((<>) i)
                 bossRef<! (-1,-1)
+
                 system.Stop(sender)
             else if counter = 1 then
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
@@ -134,18 +145,13 @@ let Actor i j (mailbox: Actor<_>) =
             else
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
             return! loop ()
-            
 
-            
+
         | (1.0,1.0) ->
             if counter<10 then 
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 if counter <10 then 
                     selfRef<!(1.0,1.0)
-              
-                
-            if counter>=10 then
-                system.Stop(sender)
 
             return! loop()
             
@@ -336,7 +342,7 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (-1,-1) -> 
                 c<-c+1
-                if c>=999 then
+                if c>=850 then
                     printf "%A" (b-System.DateTime.Now)
                     printf "Done"
 
@@ -357,4 +363,5 @@ printf "%A" boss
 
 
 printf "value of k=%i" k
-        printf "value of c=%i" c
+printf "value of c=%i" c
+printf "Pending actors=%A" pendingActors

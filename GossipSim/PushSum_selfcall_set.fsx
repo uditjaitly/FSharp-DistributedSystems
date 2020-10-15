@@ -9,11 +9,11 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=33
+let numOfNodes=1000
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="line"
+let topology="full"
 let algo = "gossip"
 let mutable actorRef = select "akka://MySystem/user/" system
 let round (x:float,d:float) =
@@ -25,34 +25,41 @@ let mutable b= System.DateTime.Now
 let checkCounter = 
     if c >8 then
         printf "done"
-let mutable completedActors=Set.empty.Add(-1)
+let mutable allactors= Set.ofSeq[1..1..1000]
 
 let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w : float)  =
     let mutable index=(rand.Next()%numberOfNeighbors)
     let mutable randomNum=neighbors.[index]
+    let mutable num_string = string randomNum
+    let mutable pathToActor="akka://MySystem/user/" + num_string
+
     let mutable e=0
     //printfn "random num=%i" randomNum
-    for m=1 to (numberOfNeighbors-1) do
-        if completedActors.Contains(neighbors.[m])=true then
-            e<-e+1
-
+        
     if e <> (numberOfNeighbors-1) then
 
-        while index = 0 || randomNum =i || randomNum=0 || completedActors.Contains(randomNum)=true do
+        while index = 0 || randomNum =i || randomNum=0 do
             index<-(rand.Next()%numberOfNeighbors)
             randomNum<-neighbors.[index]
 
     e<-0
-    //randomNum<-neighbors.[randomNum]
-    //printfn "%i Sending to %i" i randomNum
-    let num_string= string randomNum
-    let pathToActor="akka://MySystem/user/" + num_string
-    //printfn "%s" pathToActor
-    actorRef <- select pathToActor system
-    if algo = "gossip" then
-        actorRef<! (-1.0,-1.0)
-    else if algo = "push sum" then
-        actorRef<! (s,w)
+    if allactors.Contains(randomNum) then 
+        num_string<- string randomNum
+        pathToActor<-"akka://MySystem/user/" + num_string
+        //printfn "%s" pathToActor
+        
+    else 
+        num_string<-string ()
+
+
+
+        actorRef <- select pathToActor system
+        if algo = "gossip" then
+            actorRef<! (-1.0,-1.0)
+        else if algo = "push sum" then
+            actorRef<! (s,w)
+
+    
 ()
 
 
@@ -134,7 +141,6 @@ let Actor i j (mailbox: Actor<_>) =
                 k<-k+1
                // printf "%A" sender
                 let mutable completedAct=Set.empty.Add(i)
-                completedActors<-Set.union completedAct completedActors
                 //printf "%A" completedActors
                 bossRef<! (-1,-1)
 
@@ -369,3 +375,6 @@ printf "%A" boss
 
 printf "value of k=%i" k
 printf "value of c=%i" c
+let mutable test= [1; 2; 3; 1] |> List.filter ((<>) 1)
+test<-test |> List.filter((<>)2) 
+printf "%A" test
