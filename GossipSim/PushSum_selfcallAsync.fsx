@@ -13,7 +13,7 @@ let numOfNodes=1000
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="line"
+let topology="full"
 let algo = "gossip"
 let mutable inc=0
 let mutable actorRef = select "akka://MySystem/user/" system
@@ -126,7 +126,7 @@ let Actor i j (mailbox: Actor<_>) =
         | (1.0,1.0) ->
             async{
                 while proceed do
-                    do! Async.Sleep 1
+                    do! Async.Sleep 50
                     pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 } |> Async.StartImmediate
             return! loop()
