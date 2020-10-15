@@ -9,11 +9,11 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=1000
+let numOfNodes=33
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="line"
+let topology="2d grid"
 let algo = "gossip"
 let mutable inc=0
 let mutable actorRef = select "akka://MySystem/user/" system
@@ -121,9 +121,11 @@ let Actor i j (mailbox: Actor<_>) =
             if counter = 1 then
                 async {
                     while proceed do
-                        do! Async.Sleep 0
+                        do! Async.Sleep 500
                         pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 } |> Async.StartImmediate
+            else
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
 
             return! loop ()
 
@@ -323,7 +325,7 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (1.0,1.0) -> 
                 inc<-inc+1 
-                if(inc>300) then
+                if(inc>=1085) then
                     b.Stop()
                     printfn "%f" b.Elapsed.TotalMilliseconds
 

@@ -10,12 +10,12 @@ open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
 printfn "%A" input
-let numOfNodes= 1000
+let numOfNodes= int input.[3]
+let topology=input.[4]
+let algo = input.[5]
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k =decimal 0
-let topology="line"
-let algo = "push sum"
 let mutable actorRef = select "akka://MySystem/user/" system
 let iCeil=int (Math.Ceiling(Math.Sqrt(float numOfNodes)))
 let jFloor=int (Math.Ceiling(Math.Sqrt(float numOfNodes)))
@@ -25,8 +25,9 @@ let mutable b=System.Diagnostics.Stopwatch.StartNew()
 let checkCounter = 
     if c >8 then
         printf "done"
+let mutable proceed1=true
 
-let mutable pendingActors= [1..numOfNodes]
+let mutable pendingActors= [1..1]
 
 type Values={Values : List<decimal>}
 
@@ -46,9 +47,12 @@ let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : decimal
     let mutable flag=0
     let mutable freeNeighbors=[]
     //printfn "random num=%i" randomNum
-    while index = 0 || randomNum =i || randomNum=0 do
-        index<-(rand.Next()%numberOfNeighbors)
-        randomNum<-neighbors.[index]
+    if topology = "full" & algo = "gossip" then
+        randomNum<-(rand.Next()%numOfNodes)
+    else
+        while index = 0 || randomNum =i || randomNum=0 do
+            index<-(rand.Next()%numberOfNeighbors)
+            randomNum<-neighbors.[index]
 
     num_string<- string randomNum
     pathToActor<-"akka://MySystem/user/" + num_string
@@ -102,7 +106,7 @@ let Actor i j (mailbox: Actor<_>) =
     //printfn "i=%i" i
     match topology with
         | "full"->
-            for x = 1 to numOfNodes do
+            for x = 1 to 2 do
                 if x <> i then
                     neighbors <- [x] |> List.append neighbors
         | "line"->
@@ -162,12 +166,16 @@ let Actor i j (mailbox: Actor<_>) =
             else if counter = 1 then
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 selfRef<! GossipSelf "Why am i talking to myself"
+            else if counter < 10 then
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+
             return! loop ()
 
 
         | GossipSelf sg ->
             selfGossipCounter<-selfGossipCounter+1
-            if selfGossipCounter%100=0 then
+            if selfGossipCounter=500 then
+                selfGossipCounter<-0
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
 
             selfRef<!GossipSelf "Why am i talking to myself"
@@ -384,12 +392,12 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (-1,-1) -> 
                 c<-c+1
-                if c>=numOfNodes then
+                if c>=numOfNodes-1 then
                     b.Stop()
                     printfn "Done="
                     printf "%A" (b.Elapsed.TotalMilliseconds)
-                    
-                    system.Terminate()
+                    proceed1<-false
+                    ()
 
 
             return! listen()
@@ -404,17 +412,9 @@ let boss =
     |> spawn system "master"
 
 
-printf "%A" boss
-#time "on"
 
-
-printf "value of k=%A" k
-printf "value of c=%i" c
-printf "presentActors=%A" pendingActors
-printf "presentActorsLength=%A" pendingActors.Length
-
-
-let gg=decimal 54
-Math.Round(gg/decimal 7,2)
-
-
+while proceed1 do
+    Async.Sleep 10
+    if c>=numOfNodes then
+        proceed1<-false
+ 

@@ -113,11 +113,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/uditjaitly/Desktop/f#/GossipSimulator/GossipSim/GossipSimulator.fsproj",
+      "projectUniqueName": "/Users/uditjaitly/Desktop/FSharp-DistributedSystems/GossipSim/GossipSimulator.fsproj",
       "projectName": "GossipSimulator",
-      "projectPath": "/Users/uditjaitly/Desktop/f#/GossipSimulator/GossipSim/GossipSimulator.fsproj",
+      "projectPath": "/Users/uditjaitly/Desktop/FSharp-DistributedSystems/GossipSim/GossipSimulator.fsproj",
       "packagesPath": "/Users/uditjaitly/.nuget/packages/",
-      "outputPath": "/Users/uditjaitly/Desktop/f#/GossipSimulator/GossipSim/obj/",
+      "outputPath": "/Users/uditjaitly/Desktop/FSharp-DistributedSystems/GossipSim/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/Users/uditjaitly/.nuget/NuGet/NuGet.Config"

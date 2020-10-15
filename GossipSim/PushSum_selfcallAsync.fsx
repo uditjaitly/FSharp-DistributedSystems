@@ -9,7 +9,7 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=1000
+let numOfNodes=44
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
@@ -121,12 +121,17 @@ let Actor i j (mailbox: Actor<_>) =
                 k<-k+1
                 bossRef<! (1.0,1.0)
             if counter =1  then
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 selfRef<! (1.0,1.0)
+
+            if counter <10 then 
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+
             return! loop ()
         | (1.0,1.0) ->
             async{
                 while proceed do
-                    do! Async.Sleep 50
+                    do! Async.Sleep 200
                     pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 } |> Async.StartImmediate
             return! loop()
@@ -320,7 +325,7 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (1.0,1.0) -> 
                 inc<-inc+1 
-                if(inc>800) then
+                if(inc>=1700) then
                     b.Stop()
                     printfn "%f" b.Elapsed.TotalMilliseconds
 
@@ -338,4 +343,4 @@ let boss =
 #time "on"
 
 
-printf "value of k=%i" k
+printf "value of k=%i" inc

@@ -10,26 +10,32 @@ open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
 printfn "%A" input
-let numOfNodes= 1000
+let numOfNodes= int input.[3]
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k =decimal 0
-let topology="line"
-let algo = "push sum"
+let topology=input.[4]
+let algo = input.[5]
 let mutable actorRef = select "akka://MySystem/user/" system
 let iCeil=int (Math.Ceiling(Math.Sqrt(float numOfNodes)))
 let jFloor=int (Math.Ceiling(Math.Sqrt(float numOfNodes)))
 let bossRef= select "akka://MySystem/user/master" system
 let mutable c=0
+let mutable proceed=true
 let mutable b=System.Diagnostics.Stopwatch.StartNew()
 let checkCounter = 
     if c >8 then
         printf "done"
-
+let mutable selfLimit=10
+if topology = "line" then
+    selfLimit<-50
+if topology = "2d-grid" || topology = "imperfect-2d-grid" then
+    selfLimit<-1000
+let mutable finish=0
 let mutable pendingActors= [1..numOfNodes]
-
+let threshhold = int (0.85* float numOfNodes)
 type Values={Values : List<decimal>}
-
+let mutable proceed1=true
 type Command = 
     | ValuesForPush of Values
     | Gossip of string
@@ -46,16 +52,33 @@ let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : decimal
     let mutable flag=0
     let mutable freeNeighbors=[]
     //printfn "random num=%i" randomNum
-    while index = 0 || randomNum =i || randomNum=0 do
-        index<-(rand.Next()%numberOfNeighbors)
-        randomNum<-neighbors.[index]
+    
+
+
+    if topology = "full" & algo = "gossip" then
+        let temp_rand= (rand.Next()%numOfNodes)
+        if temp_rand= 0 then 
+            num_string<-string numOfNodes
+            pathToActor<-"akka://MySystem/user/" + num_string
+        else
+            num_string<-string (temp_rand)
+            pathToActor<-"akka://MySystem/user/" + num_string 
+    else
+        while index = 0 || randomNum =i || randomNum=0 do
+            index<-(rand.Next()%numberOfNeighbors)
+            randomNum<-neighbors.[index]
+
+
+    
 
     num_string<- string randomNum
     pathToActor<-"akka://MySystem/user/" + num_string
     actorRef <- select pathToActor system
+
+
     if algo = "gossip" then
         actorRef<! Gossip "This is a very hot rumor"
-    else if algo = "push sum" && topology <> "full" then
+    else if algo = "push-sum" && topology <> "full" then
         if List.contains randomNum pendingActors then
             num_string<- string randomNum
             pathToActor<-"akka://MySystem/user/" + num_string
@@ -102,7 +125,7 @@ let Actor i j (mailbox: Actor<_>) =
     //printfn "i=%i" i
     match topology with
         | "full"->
-            for x = 1 to numOfNodes do
+            for x = 1 to 2 do
                 if x <> i then
                     neighbors <- [x] |> List.append neighbors
         | "line"->
@@ -115,7 +138,7 @@ let Actor i j (mailbox: Actor<_>) =
                 neighbors <- [i-1] |> List.append neighbors
                 neighbors <- [i+1] |> List.append neighbors
 
-        | "2d grid"->
+        | "2d-grid"->
             if (i+jFloor) <= (numOfNodes) then
                 neighbors <- [i+jFloor] |> List.append neighbors
             if (i-jFloor) > 0 then
@@ -124,7 +147,9 @@ let Actor i j (mailbox: Actor<_>) =
                 neighbors <- [i-1] |> List.append neighbors
             if ((i+1) <= (numOfNodes) && (((i+1)%jFloor)<>1))  then
                 neighbors <- [i+1] |> List.append neighbors
-        | "imperfect 2d grid"->
+
+                
+        | "imperfect-2d-grid"->
             if (i+jFloor) <= (numOfNodes) then
                 neighbors <- [i+jFloor] |> List.append neighbors
             if (i-jFloor) > 0 then
@@ -162,12 +187,18 @@ let Actor i j (mailbox: Actor<_>) =
             else if counter = 1 then
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
                 selfRef<! GossipSelf "Why am i talking to myself"
+            else if counter<10 then
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+                //selfRef<! GossipSelf "Why am i talking to myself"
+                k<-k+decimal 1
+            
             return! loop ()
 
 
         | GossipSelf sg ->
             selfGossipCounter<-selfGossipCounter+1
-            if selfGossipCounter%100=0 then
+            if selfGossipCounter=selfLimit then
+                selfGossipCounter<-0
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
 
             selfRef<!GossipSelf "Why am i talking to myself"
@@ -243,7 +274,7 @@ let Master i j (mailbox: Actor<_>) =
                     actorRef <-
                         Actor i algo
                         |> spawn system actorName
-                    //printfn "%i Actor Created" i
+                   // printfn "%i Actor Created" i
 
                 let num_string= string (rand.Next()%(numOfNodes))
                 let pathToActor="akka://MySystem/user/" + num_string
@@ -253,7 +284,7 @@ let Master i j (mailbox: Actor<_>) =
 
 
 
-            |"push sum"->
+            |"push-sum"->
                 for i = 1 to numOfNodes do
                     let actorName=string i
                     actorRef <-
@@ -286,7 +317,7 @@ let Master i j (mailbox: Actor<_>) =
 
 
 
-            |"push sum"->
+            |"push-sum"->
                 for i = 1 to numOfNodes do
                     let actorName=string i
                     actorRef <-
@@ -298,7 +329,7 @@ let Master i j (mailbox: Actor<_>) =
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
-    |"2d grid"->
+    |"2d-grid"->
         
         match algo with
             |"gossip"-> 
@@ -319,7 +350,7 @@ let Master i j (mailbox: Actor<_>) =
 
                  
 
-            |"push sum"->
+            |"push-sum"->
                 for i= 1 to iCeil do
                     for j=1 to jFloor do
                         actorID<-actorID+1
@@ -334,7 +365,8 @@ let Master i j (mailbox: Actor<_>) =
                 let randomActor = select pathToActor system
                 printf "%A" randomActor
                 randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
-    |"imperfect 2d grid"->
+                b<-System.Diagnostics.Stopwatch.StartNew()
+    |"imperfect-2d-grid"->
         match algo with
                 |"gossip"->
                     for i= 1 to iCeil do
@@ -353,7 +385,7 @@ let Master i j (mailbox: Actor<_>) =
                     b<-System.Diagnostics.Stopwatch.StartNew()
 
 
-                |"push sum"->
+                |"push-sum"->
                     for i= 1 to iCeil do
                         for j=1 to jFloor do
                             actorID<-actorID+1
@@ -384,12 +416,13 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (-1,-1) -> 
                 c<-c+1
-                if c>=numOfNodes then
+                if c>=threshhold then
                     b.Stop()
                     printfn "Done="
                     printf "%A" (b.Elapsed.TotalMilliseconds)
                     
-                    system.Terminate()
+                    proceed1<-false
+                    ()
 
 
             return! listen()
@@ -404,7 +437,13 @@ let boss =
     |> spawn system "master"
 
 
-printf "%A" boss
+while proceed1 do
+    Async.Sleep 10
+    if c>=numOfNodes then
+        proceed<-false
+ 
+
+(*printf "%A" boss
 #time "on"
 
 
@@ -415,6 +454,6 @@ printf "presentActorsLength=%A" pendingActors.Length
 
 
 let gg=decimal 54
-Math.Round(gg/decimal 7,2)
+Math.Round(gg/decimal 7,2)*)
 
 
