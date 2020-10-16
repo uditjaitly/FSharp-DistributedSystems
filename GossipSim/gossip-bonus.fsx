@@ -13,6 +13,7 @@ printfn "%A" input
 let numOfNodes= int input.[3]
 let topology=input.[4]
 let algo = input.[5]
+let failureNods=input.[6]
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k =decimal 0
