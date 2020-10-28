@@ -13,7 +13,7 @@ printfn "%A" input
 let numOfNodes= int input.[3]
 let topology=input.[4]
 let algo = input.[5]
-let failureNods=input.[6]
+let failureNodes= int input.[6]
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k =decimal 0
@@ -28,7 +28,7 @@ let checkCounter =
         printf "done"
 let mutable selfLimit=500
 let mutable proceed1=true
-
+let mutable threshold = 0.8* float(numOfNodes-failureNodes)
 let mutable pendingActors= [1..numOfNodes]
 
 type Values={Values : List<decimal>}
@@ -38,6 +38,19 @@ type Command =
     | Gossip of string
     | GossipSelf of string
 
+let mutable poisonActors = Array.create (numOfNodes+22) (0) 
+let mutable tempStore=rand.Next()%numOfNodes
+for b = 1 to failureNodes do
+    tempStore<-rand.Next()%numOfNodes
+    while poisonActors.[tempStore]=1 do
+        tempStore<-rand.Next()%numOfNodes
+    
+    poisonActors.[tempStore]<-1
+        
+let mutable flag4=1
+let checkIfPoisoned i ref=
+    if poisonActors.[i]= 1 then
+        system.Stop(ref)
 
 
 let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : decimal,w : decimal)  =
@@ -48,18 +61,25 @@ let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : decimal
     let mutable itr=1
     let mutable flag=0
     let mutable freeNeighbors=[]
+    
     //printfn "random num=%i" randomNum
-    if topology = "full" then 
-        if topology = "full" & algo = "gossip" then
-            randomNum<-(rand.Next()%numOfNodes)
-        else
-            while index = 0 || randomNum =i || randomNum=0 do
+    if topology = "full" & algo = "gossip" then
+        randomNum<-(rand.Next()%numOfNodes)
+    else
+        for i =1 to numberOfNeighbors-1 do
+            if poisonActors.[neighbors.[i]]<>1 then
+                randomNum<-neighbors.[index]
+                flag4<-0
+
+        if flag4=1 then
+
+            while index = 0 || randomNum =i || randomNum=0 || poisonActors.[randomNum]=1 do
                 index<-(rand.Next()%numberOfNeighbors)
                 randomNum<-neighbors.[index]
-
-        num_string<- string randomNum
-        pathToActor<-"akka://MySystem/user/" + num_string
-        actorRef <- select pathToActor system
+    //printf "HERE IS THE RANDOM%i" randomNum
+    num_string<- string randomNum
+    pathToActor<-"akka://MySystem/user/" + num_string
+    actorRef <- select pathToActor system
     if algo = "gossip" then
         actorRef<! Gossip "This is a very hot rumor"
     else if algo = "push-sum" && topology <> "full" then
@@ -143,21 +163,20 @@ let Actor i j (mailbox: Actor<_>) =
 
             neighbors <- [rand.Next()%(numOfNodes)] |> List.append neighbors
         | _ -> ()
-
-
+    
 
 
     let numberOfNeighbors= neighbors.Length
     let ss= string i
     let p="akka://MySystem/user/" + ss
     let selfRef= select p system
+    //printf "selfRef%A" selfRef
     //printfn "Neighbors for actor=%i are %A" i neighbors
     //printfn "num of neighbors for actor=%i is %i" i numberOfNeighbors
 
     let rec loop n = actor {
         let! message = mailbox.Receive()
         let sender = mailbox.Sender()
-
         match message with
         | Gossip g ->
             counter<-counter+1
@@ -244,6 +263,7 @@ let Master i j (mailbox: Actor<_>) =
         |>spawn system "Actor"
     let mutable actorID = 0
 
+    
     match topology with 
     |"full"->
         
@@ -255,8 +275,13 @@ let Master i j (mailbox: Actor<_>) =
                         Actor i algo
                         |> spawn system actorName
                     //printfn "%i Actor Created" i
-
-                let num_string= string (rand.Next()%(numOfNodes))
+                    if poisonActors.[i]=1 then
+                        system.Stop(actorRef)
+                        printfn "ACTOR STOPPED=%A" actorRef
+                let mutable tempStore=rand.Next()%(numOfNodes)
+                while poisonActors.[tempStore]=1 do
+                    tempStore<-rand.Next()%(numOfNodes)
+                let num_string= string (tempStore)
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! Gossip "This is a very hot rumor"
@@ -286,9 +311,15 @@ let Master i j (mailbox: Actor<_>) =
                     actorRef <-
                         Actor i algo
                         |> spawn system actorName
+                    if poisonActors.[i]=1 then
+                        system.Stop(actorRef)
+                        printfn "ACTOR STOPPED=%A" actorRef
+                let mutable tempStore=rand.Next()%(numOfNodes)
+                while poisonActors.[tempStore]=1 do
+                    tempStore<-rand.Next()%(numOfNodes)
                     //printfn "%i Actor Created" i
 
-                let num_string= string (rand.Next()%(numOfNodes))
+                let num_string= string (tempStore)
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! Gossip "This is a very hot rumor"
@@ -310,7 +341,7 @@ let Master i j (mailbox: Actor<_>) =
                 let randomActor = select pathToActor system
                 randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
     |"2d-grid"->
-        selfLimit<-1500
+        selfLimit<-100
         match algo with
             |"gossip"-> 
                 for i= 1 to iCeil do
@@ -322,9 +353,19 @@ let Master i j (mailbox: Actor<_>) =
                             actorRef <-
                                 Actor actorID algo
                                 |> spawn system actorName
-                let num_string= string (rand.Next()%(numOfNodes))
+
+                            if poisonActors.[actorID]=1 then
+                                system.Stop(actorRef)
+                                printfn "ACTOR STOPPED=%A" actorRef
+                                pendingActors<-pendingActors |> List.filter ((<>) actorID)
+
+                let mutable tempStore=rand.Next()%(numOfNodes)
+                while poisonActors.[tempStore]=1 do
+                    tempStore<-rand.Next()%(numOfNodes)
+                let num_string= string (tempStore)
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
+                printfn "random chosen=%A" randomActor
                 randomActor <! Gossip "This is a very hot rumor"
                 b<-System.Diagnostics.Stopwatch.StartNew()
 
@@ -346,7 +387,7 @@ let Master i j (mailbox: Actor<_>) =
                 printf "%A" randomActor
                 randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
     |"imperfect-2d-grid"->
-        selfLimit<-1000
+        selfLimit<-500
         match algo with
                 |"gossip"->
                     for i= 1 to iCeil do
@@ -358,7 +399,13 @@ let Master i j (mailbox: Actor<_>) =
                                 actorRef <-
                                     Actor actorID algo
                                     |> spawn system actorName
-                    let num_string= string (rand.Next()%(numOfNodes))
+                                if poisonActors.[actorID]=1 then
+                                    system.Stop(actorRef)
+                                    printfn "ACTOR STOPPED=%A" actorRef
+                    let mutable tempStore=rand.Next()%(numOfNodes)
+                    while poisonActors.[tempStore]=1 do
+                        tempStore<-rand.Next()%(numOfNodes)
+                    let num_string= string (tempStore)
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
                     randomActor <! Gossip "This is a very hot rumor"
@@ -396,7 +443,7 @@ let Master i j (mailbox: Actor<_>) =
             match message with
             | (-1,-1) -> 
                 c<-c+1
-                if c>=numOfNodes-1 then
+                if c>=int threshold then
                     b.Stop()
                     printfn "Done="
                     printf "%A" (b.Elapsed.TotalMilliseconds)
@@ -415,7 +462,7 @@ let boss =
     Master -1 algo
     |> spawn system "master"
 
-
+printfn "number of compeleted actors=%i" c
 
 while proceed1 do
     Async.Sleep 10

@@ -236,7 +236,6 @@ let Actor i j (mailbox: Actor<_>) =
 
 
 
-
 let Master i j (mailbox: Actor<_>) =
     let mutable actorRef =
         Actor -1 algo
@@ -308,6 +307,8 @@ let Master i j (mailbox: Actor<_>) =
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
+                b<-System.Diagnostics.Stopwatch.StartNew()
+
     |"2d-grid"->
         selfLimit<-1500
         match algo with
