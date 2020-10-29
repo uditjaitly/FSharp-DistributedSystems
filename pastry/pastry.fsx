@@ -43,5 +43,5 @@ let Slave (mailbox: Actor<_>) =
 
 
 let NodeRef =
-    Slave 1 2
+    Slave actorID algo
     |> spawn system actorName
