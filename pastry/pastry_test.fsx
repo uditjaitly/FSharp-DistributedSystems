@@ -20,6 +20,7 @@ type Command =
     | GossipSelf of string
     | LeafSmaller of Set<int>
     | LeafGreater of Set<int>
+    | InitDone of string
     | RoutingTable of int[,]
 let inline charToInt c = int c - int '0'
 
@@ -28,7 +29,7 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
     
     let L=8
     let mutable routingTable = 
-        [| for i in 0 .. (int temp-1) do 
+        [| for i in 0 .. (int temp) do 
             yield [| for i in 0 ..3 do yield -1 |] 
         |] |> array2D
     let IDrange=  (int) (Math.Pow(4.0,temp))
@@ -41,7 +42,6 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
     let createLeafSet (nodeList: int[], nodeID: int) = 
         for i = 1 to (nodeList.Length-1) do
             let isLessThanID = nodeID > nodeList.[i]
-            
             match isLessThanID with
             | true->
                 if leafSmaller.Contains(nodeList.[i]) = false then
@@ -65,13 +65,22 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
             let nodeStr=string nodeList.[i]
             let nodeIDStr=string nodeID
             let mutable k = 0
-           
-            while ((nodeStr.[k]|>charToInt) = (nodeIDStr.[k]|>charToInt)) && ((k <> nodeIDStr.Length)) do
+            let mutable intAt1= (nodeStr.[k]|>charToInt)
+            let mutable intAt2= (nodeIDStr.[k]|>charToInt)
+            let gg= nodeIDStr.Length
+            ()
+            while ( k < nodeIDStr.Length-1 && k<>nodeStr.Length-1 && intAt1 = intAt2 ) do
                 k<-k+1
-            //if routingTable.[k,nodeStr.[k]|>charToInt] = -1 then
-              //  routingTable.[k, nodeStr.[k]|>charToInt] <- nodeList.[i]
+                intAt1<- (nodeStr.[k]|>charToInt)
+                intAt2<- (nodeIDStr.[k]|>charToInt)
+                ()
+                 
+
+            //printf "%i" k
+            if routingTable.[k,nodeStr.[k]|>charToInt] = -1 then
+                 routingTable.[k, nodeStr.[k]|>charToInt] <- nodeList.[i]
                 
-            
+      
                 
     ()
             
@@ -84,14 +93,22 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
         let sender = mailbox.Sender()
         match message with 
         | ConnectionInit initialNodeList -> 
-            
+            let initialNodeList = initialNodeList|>Array.filter((<>)nodeID)
             createLeafSet(initialNodeList,nodeID)
+            //printfn "%A" leafSmaller
             fillRoutingTable(initialNodeList,nodeID)
-            if nodeID=10122 then
+            for i=0 to int temp do
+                let nodeIDStr=string nodeID
+                if i<=nodeIDStr.Length-1 then
+                    routingTable.[i, (nodeIDStr.[i])|>charToInt]<-(-1)
+            if nodeID=10020022 then
                 sender<! LeafSmaller leafSmaller
                 sender<! LeafGreater leafGreater
                 sender<! RoutingTable routingTable
             
+           // sender <! InitDone "Done Initialization"
+        // | StartRouting initialNodeList -> 
+        //     let initialNodeList = initialNodeList|>Array.filter((<>)nodeID)
         sender <! 1
     }
 
@@ -113,18 +130,21 @@ let rand = System.Random()
 let Master i j k (mailbox: Actor<_>) =
     let temp=ceil(Math.Log((float)numOfNodes,4.0))
     let IDrange=  (int) (Math.Pow(4.0,temp))
+    let IDrangeEnd= (int) (Math.Pow(4.0,temp+1.0))
     let mutable nodeList= Array.create (numOfNodes+1) -1
-    let numForInit=800
+    let numForInit=10000
     let mutable initialNodeList= Array.create (numForInit+1) -1
 
   
-
+    let mutable valAdd=0
+    ()
     for i =1 to numForInit do
-        let base4List=intToDigits i
+        let base4List=intToDigits (IDrange+valAdd)
         let base4String=List.fold (fun str x -> str + x.ToString()) "" (base4List)
         let base4Int= int base4String
         Array.set initialNodeList i base4Int
         actorsIDSet<- actorsIDSet.Add(base4Int)
+        valAdd<-valAdd+3
 
     printfn "%A" initialNodeList
     printfn "%i" actorsIDSet.Count
@@ -155,7 +175,9 @@ let Master i j k (mailbox: Actor<_>) =
                 printfn "Greater Leaf%A" leafGreater
             | RoutingTable routingTable->
                 printfn "routing Table%A" routingTable
-
+            //| InitDone s->
+                    //let selectedActor= select "akka://MySystem/user/10122" system
+                   // selectedActor<!StartRouting initialNodeList
 
             return! listen()
         }
@@ -166,3 +188,4 @@ let boss =
     Master 1 1 1
     |> spawn system "master"
 boss<! Initialize "start the program"
+
