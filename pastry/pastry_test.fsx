@@ -14,6 +14,7 @@ let input=System.Environment.GetCommandLineArgs()
 let numOfNodes=10000
 let numOfReq=10
 
+type RouteMessage = {RouteMessage:List<int>}
 type Command = 
     | Initialize of String
     | ConnectionInit of int[] 
@@ -22,11 +23,26 @@ type Command =
     | LeafGreater of Set<int>
     | InitDone of string
     | RoutingTable of int[,]
+    | StartRouting of int
+    | Route of RouteMessage
 let inline charToInt c = int c - int '0'
+
+let toDecimal (nodeStr: string) = 
+    let len=nodeStr.Length
+    let mutable power=1
+    let mutable num=0
+    let mutable i=(len-1)
+    while i >= 0 do
+        num<-num+ ((nodeStr.[i]|>charToInt) * power)
+        power<-power*4
+        i<-i-1
+    num
+
+
+
 
 let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) = 
     let temp=ceil(Math.Log((float)numOfNodes,4.0))
-    
     let L=8
     let mutable routingTable = 
         [| for i in 0 .. (int temp) do 
@@ -35,10 +51,14 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
     let IDrange=  (int) (Math.Pow(4.0,temp))
     let mutable leafGreater= Set.empty.Add(1)
     let mutable leafSmaller= Set.empty.Add(1)
+    let mutable myNodeList= Array.create (numOfNodes+1) -1
+    let mutable hops =0
+
     leafGreater<-leafGreater.Remove(1)
     leafSmaller<-leafSmaller.Remove(1)
-
-
+    let actName=string nodeID
+    let p="akka://MySystem/user/" +  actName
+    let selfRef= select p system
     let createLeafSet (nodeList: int[], nodeID: int) = 
         for i = 1 to (nodeList.Length-1) do
             let isLessThanID = nodeID > nodeList.[i]
@@ -87,13 +107,14 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
             
             
 
-
-    actor {
+    
+    let rec loop n = actor {
         let! message = mailbox.Receive()
         let sender = mailbox.Sender()
         match message with 
         | ConnectionInit initialNodeList -> 
             let initialNodeList = initialNodeList|>Array.filter((<>)nodeID)
+            myNodeList<-initialNodeList
             createLeafSet(initialNodeList,nodeID)
             //printfn "%A" leafSmaller
             fillRoutingTable(initialNodeList,nodeID)
@@ -101,16 +122,60 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
                 let nodeIDStr=string nodeID
                 if i<=nodeIDStr.Length-1 then
                     routingTable.[i, (nodeIDStr.[i])|>charToInt]<-(-1)
-            if nodeID=10020022 then
+            if nodeID=10000000 then
                 sender<! LeafSmaller leafSmaller
                 sender<! LeafGreater leafGreater
                 sender<! RoutingTable routingTable
             
-           // sender <! InitDone "Done Initialization"
-        // | StartRouting initialNodeList -> 
-        //     let initialNodeList = initialNodeList|>Array.filter((<>)nodeID)
+                sender <! InitDone "Done Initialization"
+            return! loop()
+        | StartRouting key -> 
+            
+            selfRef <! Route {RouteMessage = [key;hops]}
+            return! loop()
+        | Route {RouteMessage=message}->
+            let key=message.[0]
+            let hops=message.[1]           
+            printfn "HERE"
+
+            let keyDecimal= toDecimal ((string) key)
+            let nodeIDDecimal=toDecimal((string)nodeID)
+            let mutable closestNode = (-1)
+            let mutable min=99999
+            ()
+            if ( leafSmaller.Count <> 0 && keyDecimal>=toDecimal (string leafSmaller.MinimumElement) && keyDecimal<=nodeIDDecimal ) then
+                for leaf in leafSmaller do 
+                    let t = Math.Abs(toDecimal (string leaf) - keyDecimal)
+                    if( t<min) then
+                        closestNode<-leaf
+                        min<-t
+                        printfn "INHERE"
+
+
+            else if (keyDecimal<=toDecimal (string leafGreater.MaximumElement) && keyDecimal>=nodeIDDecimal && leafGreater.Count <> 0) then
+                for leaf in leafGreater do
+                    let t = Math.Abs(toDecimal(string leaf) - keyDecimal)
+                    if(t<min) then
+                        closestNode<-leaf
+                        min<-t
+                        printfn "INHERE"
+
+            if min<>99999 && Math.Abs(nodeIDDecimal-keyDecimal)<=min then 
+                printfn "DESTINATION REACHED IN HOPS %i" hops
+                //////IMPLEMENT CODE TO UPDATE MASTER//////
+            else if min <> 99999 && Math.Abs(nodeIDDecimal-keyDecimal)>min then
+                printfn "HERE"
+                let actorName=string closestNode
+                let pathToActor="akka://MySystem/user/" + actorName
+                let nextNode= select pathToActor system
+                printfn "Message of destination %i received by %i to be sent to %i" key nodeID closestNode
+                nextNode<! Route {RouteMessage = [key;hops+1]}
+        |_-> printfn "HHere"
+
+
         sender <! 1
     }
+    loop()
 
 
 
@@ -175,9 +240,13 @@ let Master i j k (mailbox: Actor<_>) =
                 printfn "Greater Leaf%A" leafGreater
             | RoutingTable routingTable->
                 printfn "routing Table%A" routingTable
-            //| InitDone s->
-                    //let selectedActor= select "akka://MySystem/user/10122" system
-                   // selectedActor<!StartRouting initialNodeList
+            | InitDone s->
+                    let selectedActor= select "akka://MySystem/user/10000000" system
+                    let key=10000002
+                    printfn "HERE"
+
+    
+                    selectedActor<!StartRouting key
 
             return! listen()
         }
