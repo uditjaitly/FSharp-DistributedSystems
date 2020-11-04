@@ -11,12 +11,13 @@ open System.Diagnostics
 //////////////////////////////Initialization and input processing/////////////////////////////////////
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=100
+let numOfNodes=10000
 let numOfReq=10
 let mutable avghops=0.0
 let mutable count=0
-let mutable numInitCount=0
+let mutable initDoneFor=0
 type RouteMessage = {RouteMessage:List<int>}
+type TableRow={TableRow:List<int>}
 type Command = 
     | Initialize of String
     | ConnectionInit of int[] 
@@ -28,9 +29,11 @@ type Command =
     | StartRouting of int
     | Route of RouteMessage
     | NodeJoin
-    | JoiningNode of int
+    | NewNodeJoin of int
+    | UpdateTableRow of TableRow
+    | Here of String
 let inline charToInt c = int c - int '0'
-
+let mutable counter=0
 let toDecimal (nodeStr: string) = 
     let len=nodeStr.Length
     let mutable power=1
@@ -41,8 +44,6 @@ let toDecimal (nodeStr: string) =
         power<-power*4
         i<-i-1
     num
-
-
 
 
 let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) = 
@@ -104,7 +105,7 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
                     
                  
 
-        else if (leafGreater.Count <> 0 && keyDecimal<=toDecimal (string leafGreater.MaximumElement) && keyDecimal>=nodeIDDecimal ) then
+        else if (keyDecimal<=toDecimal (string leafGreater.MaximumElement) && keyDecimal>=nodeIDDecimal && leafGreater.Count <> 0) then
             for leaf in leafGreater do
                 let t = Math.Abs(toDecimal(string leaf) - keyDecimal)
                 if(t<min) then
@@ -156,9 +157,9 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
         if routingTable.[k,nodeStr.[k]|>charToInt] <> (-1) then
             let actorName=string routingTable.[k,nodeStr.[k]|>charToInt]
             let pathToActor="akka://MySystem/user/" + actorName
-            let nextNode= select pathToActor system            
+            let nextNode= select pathToActor system
             printfn "Message of destination %i received by %i to be sent to %i via routing table" key nodeID routingTable.[k,nodeStr.[k]|>charToInt]
-            nextNode<! Route {RouteMessage = [key;hops+1]} 
+            nextNode<! Route {RouteMessage = [key;hops+1]}
             true
         else
             false
@@ -166,7 +167,7 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
 
 
 
- 
+
     let fillRoutingTable (nodeList: int[], nodeID: int) = 
         for i=1 to (nodeList.Length-1) do
             let nodeStr=string nodeList.[i]
@@ -211,45 +212,75 @@ let Node numOfNodes numOfReq nodeID (mailbox: Actor<_>) =
             sender <! InitDone nodeID
             return! loop()
 
-        | JoiningNode randNode ->
-            let actName=string randNode
-            let p="akka://MySystem/user/" +  actName
-            let randNodeRef= select p system
-            randNodeRef<! Route {RouteMessage=[nodeID;hops;-1]}
+        | NewNodeJoin randActor ->
+            let actorName= string randActor
+            let pathToActor="akka://MySystem/user/" + actorName
+            let selectedActor= select pathToActor system 
+            selectedActor<!Route{RouteMessage=[nodeID;hops;-1]}
 
         | StartRouting key -> 
-            sender<!NodeJoin
-            //selfRef <! Route {RouteMessage = [key;hops]}
+
+            selfRef <! Route {RouteMessage = [key;hops]}
             return! loop()
         | Route {RouteMessage=message}->
-        // if message.[2] <> -1 then
-        //     if foundInLeaf(message) then
-        //    //     printfn "Here"// DESTINATION REACHED/////
-        //         printfn "%i= count" count
+            if message.[2]= (-1) then
+                let nodeStr=string message.[0]
+                let hops=message.[1]
+                let nodeIDStr=string nodeID
+                let mutable k = 0
+                let mutable intAt1= (nodeStr.[k]|>charToInt)
+                let mutable intAt2= (nodeIDStr.[k]|>charToInt)
+                let gg= nodeIDStr.Length
+                ()
+                while ( k < nodeIDStr.Length-1 && k<>nodeStr.Length-1 && intAt1 = intAt2 ) do
+                    k<-k+1
+                    intAt1<- (nodeStr.[k]|>charToInt)
+                    intAt2<- (nodeIDStr.[k]|>charToInt)
+                    ()
+                printfn "%i" k
+                if k>0 then
+                    if hops= 0 then 
+                        for b = 0 to k do
+                            let actorName= nodeStr
+                            let pathToActor="akka://MySystem/user/" + actorName
+                            let selectedActor= select pathToActor system 
+                            let x =[routingTable.[b,0];routingTable.[b,1];routingTable.[b,2];routingTable.[b,3];b]
+                            selectedActor<!UpdateTableRow{TableRow=x}
+                            printfn "%A" x
+                            sender<!Here "here"
+                            printfn"Here"
+                
+                
 
-        //     else if foundInRoutingTable(message) then
-        //         printfn "sent through routing table"
-        //     else
-        //         printfn "Not found"
-        if message.[2] = 6 then
-            if  foundInLeaf(message) then
-           //     printfn "Here"// DESTINATION REACHED/////
-                printfn "%i= count" count
 
-            else if foundInRoutingTable(message) then
-                printfn "sent through routing table"
+
+
+
+
             else
-                printfn "Not found"
+                if foundInLeaf(message) then
+               //     printfn "Here"// DESTINATION REACHED/////
+                    printfn "%i= count" count
+                    
+                else if foundInRoutingTable(message) then
+                    printfn "sent through routing table"
+                else
+                    printfn "Not found"
+            return! loop()
 
 
-
-        return! loop()
+        | UpdateTableRow {TableRow=tableRow} ->
+            let rowNum=tableRow.[4]
+            for i=0 to 3 do
+                if routingTable.[rowNum,i] = (-1) then
+                    routingTable.[rowNum,i] <- tableRow.[i]
+            
 
         
         |_-> printfn "HHere"
 
 
-        //sender <! 1
+        sender <! 1
     }
     loop()
 
@@ -280,7 +311,7 @@ let Master i j k (mailbox: Actor<_>) =
     let mutable valAdd=0
     ()
     for i =1 to numForInit do
-        let base4List=intToDigits (IDrange + valAdd)
+        let base4List=intToDigits (IDrange+valAdd)
         let base4String=List.fold (fun str x -> str + x.ToString()) "" (base4List)
         let base4Int= int base4String
         Array.set initialNodeList i base4Int
@@ -297,12 +328,15 @@ let Master i j k (mailbox: Actor<_>) =
         printfn "Actor Created with ID = %s" actorName
         ()
 
-
+    let actName= "master"
+    let p="akka://MySystem/user/" +  actName
+    let selfRef= select p system
 
     let rec listen() =
         actor {
             let! message = mailbox.Receive()
             let sender = mailbox.Sender()
+      
             match message with
             | Initialize start -> 
                 for i = 1 to numForInit do
@@ -312,15 +346,15 @@ let Master i j k (mailbox: Actor<_>) =
                     //printf "%A" initialNodeList
                     selectedActor<! ConnectionInit initialNodeList
             | NodeJoin ->
-                let actorName=string 1212
+                let actorName=string 22211320
                 let actorRef =
-                    Node numOfNodes numOfReq 1212
+                    Node numOfNodes numOfReq 22211320
                     |>spawn system actorName
                 let pathToActor="akka://MySystem/user/" + actorName
                 let selectedActor= select pathToActor system
+                let randActor= 22210210
                 //printf "%A" initialNodeList
-                let randSelected= initialNodeList.[50]
-                selectedActor<! JoiningNode randSelected
+                selectedActor<! NewNodeJoin randActor
 
             | LeafSmaller leafSmaller -> 
                 printfn "Smaller Leaf%A" leafSmaller
@@ -329,10 +363,12 @@ let Master i j k (mailbox: Actor<_>) =
             | RoutingTable routingTable->
                 printfn "routing Table%A" routingTable
             | InitDone nodeID->
-                    numInitCount<-numInitCount+1
-                    if numInitCount=numForInit then
-                        sender<!JoiningNode 12221000
-                        printfn "%A" sender
+                initDoneFor<-initDoneFor+1
+                if(initDoneFor=numForInit) then
+                    selfRef<!NodeJoin
+
+             //       sender<!StartRouting initialNodeList.[rand.Next()%numForInit+1]
+             //       printfn "%A" sender
                    // let actorName=string nodeID
                 //    let path= "akka://MySystem/user/" + actorName
                //     let selectedActor= select path system
@@ -341,7 +377,7 @@ let Master i j k (mailbox: Actor<_>) =
 
     
                     //selectedActor<!StartRouting key
-
+            | Here here -> counter<-counter+1
             return! listen()
         }
     listen()
@@ -353,4 +389,5 @@ let boss =
 boss<! Initialize "start the program"
 
 printfn "%i= count" count
-printfn "avghops= %f" (avghops/7000.0)
+printfn "%i= counter" counter
+printfn "avghops= %f" (avghops/9000.0)
