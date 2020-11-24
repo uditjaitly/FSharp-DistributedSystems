@@ -17,7 +17,7 @@ let mutable avghops=0.0
 let mutable count=0
 let rand = System.Random()
 let numForInit=int (float (0.9*float(numOfNodes)))
-
+let mutable randomNum=0
 
 type RouteMessage = {RouteMessage:List<int>}
 type TableRow={TableRow:List<int>}
