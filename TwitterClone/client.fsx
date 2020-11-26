@@ -61,6 +61,10 @@ module Users=
             serverRef<! Server.Tweet (userName,tweet)
 
 
+            //////////Retweet////////////
+            serverRef<! Server.Retweet userName
+
+
         //////////Retweet one of the tweet from follower's list//////////////
 
         let rec listen() =

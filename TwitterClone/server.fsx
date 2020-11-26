@@ -7,11 +7,12 @@ open Global
 open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
-
+let rand=System.Random()
 type Command=
     | RegisterUser of int
     | MyFollowing of Set<int>*int
     | Tweet of int*string
+    | Retweet of int
 module HostingServer=
     let mutable registry = Set.empty<int>
     let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
@@ -65,9 +66,26 @@ module HostingServer=
                         tweets<-tweets.Add(mentionedUser,temp)
 
 
-            printfn "%A" tweets
+            //printfn "%A" tweets
             //printfn "%A" hashTags
-            
+
+        ///////////////HANDLE RETWEETS////////////////
+        let doRetweet(username:int) =
+            if iAmFollowing.ContainsKey(username) && iAmFollowing.[username].Count>0 then
+                let followSet=iAmFollowing.[username]
+                let followArray=Set.toArray(followSet)
+                let selectedUserToRt=followArray.[rand.Next()%followArray.Length]
+                let userTweets=tweets.[selectedUserToRt]
+                let selectedTweetToRt=userTweets.[rand.Next()%userTweets.Length]
+                let modifiedRt=selectedTweetToRt + "-Retweet"
+                if not(tweets.ContainsKey(username)) then               ///////Add retweet to user's feed////////////
+                            let temp=[modifiedRt]
+                            tweets<-tweets.Add(username,temp)
+                        else
+                            let mutable temp=tweets.[username]
+                            temp<-[modifiedRt] |> List.append temp
+                            tweets<-tweets.Add(username,temp)
+            printfn "%A" tweets
 
 
 
@@ -89,6 +107,8 @@ module HostingServer=
                     sender<! "updated my following"
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
+                | Retweet username->
+                    doRetweet(username)
 
 
                 return! listen()
