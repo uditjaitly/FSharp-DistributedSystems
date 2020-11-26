@@ -24,18 +24,43 @@ module Users=
 
 
 
-    let User userName numTweets numSubscribe (mailbox: Actor<_>) =
+    let User userName numTweets numSubscribe numUsers (mailbox: Actor<_>) =
+
+        let mutable setOfSubscriptions =  Set.empty<int>
+
+
+
+
+
         ////////////// REGISTER USER ///////
         printfn "USER CREATED %A" serverRef
-        serverRef<! Server.RegisterUser 1
+        serverRef<! Server.RegisterUser userName
+
+        ////////Genererate to Subscribe/////////////////
+        let generateToSubscribe (userName:int,numTweets:int,numSubscribe:int) = 
+            for i =1 to numSubscribe do
+                if i<>userName then
+                    setOfSubscriptions<-setOfSubscriptions.Add(i)
+            serverRef<! Server.MyFollowing (setOfSubscriptions,userName)
+
+        ///////// Generate Tweet by User//////////////////
+        let generateTweet(userName:int)=
+            for i=1 to numTweets do
+                let tweet= "number" + string i + "tweet from user" + string userName
+                serverRef<! Server.Tweet (userName,tweet)
+
         let rec listen() =
             actor {
                 let! message = mailbox.Receive()
                 let sender = mailbox.Sender()
 
                 match message with
-                | _ ->
+                | "user registered" ->
                     printfn "User has been registered"
+                    generateToSubscribe (userName, numTweets, numSubscribe)
+
+                | "updated my following" ->
+                    generateTweet(userName)
                 return! listen()
                         
             }

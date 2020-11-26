@@ -33,10 +33,10 @@ let Master (mailbox: Actor<_>) =
     for i=1 to numUsers do
         let userName=string i
         let numTweets=5
-        let numSubscribe=3
+        let numSubscribe=7
         let userName=string i
         let actorRef =
-            Client.Users.User i numTweets numSubscribe
+            Client.Users.User i numTweets numSubscribe numUsers
             |> spawn Global.GlobalVar.system userName
         ()
             

@@ -10,25 +10,53 @@ open Akka.FSharp
 
 type Command=
     | RegisterUser of int
-
+    | MyFollowing of Set<int>*int
+    | Tweet of int*string
 module HostingServer=
     let mutable registry = Set.empty<int>
-    
+    let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
+    let mutable tweets :Map<int,List<string>>=Map.empty
     let Server (mailbox: Actor<_>) =
         printfn "SERVER STARTED"
         
+    //////////Update following list//////////
+        let updateIAmFollowing (userName:int,subs:Set<int>) =
+            
+            iAmFollowing<-iAmFollowing.Add(userName,subs)
+            printfn "%A" iAmFollowing
+    //////////Update Tweet Record//////////////
+        let updateTweetRecord(userName:int,tweet:string) =
+            if not (tweets.ContainsKey(userName)) then
+                let temp=[tweet]
+                tweets<-tweets.Add(userName,temp)
+
+            else
+                let mutable temp=tweets.[userName]
+                temp<- [tweet] |> List.append temp
+                tweets<-tweets.Add(userName,temp)
+            printfn "%A" tweets
+
+
+
         let rec listen() =
             actor {
                 
                 let! message = mailbox.Receive()
                 let sender = mailbox.Sender()
                 match message with 
-                | RegisterUser ints->
-                    // registry<-registry.Add(2)
+                | RegisterUser user->
+                     registry<-registry.Add(user)
                      sender<! "user registered"
+                     printfn "%A" registry
                      return! listen()
+                     
                    
-                |_-> printfn "Unknown case"
+                | MyFollowing (setOfSubscriptions,userName) ->
+                    updateIAmFollowing(userName,setOfSubscriptions)
+                    sender<! "updated my following"
+                |Tweet (userName,tweet) ->
+                    updateTweetRecord(userName,tweet)
+
 
                 return! listen()
             }
