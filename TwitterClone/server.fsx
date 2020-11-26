@@ -49,9 +49,25 @@ module HostingServer=
                     temp<-[tweet] |> List.append temp
                     hashTags<-hashTags.Add(hashTag,temp)
 
+            if tweet.IndexOf "@" <> -1 then
+                let mutable i=tweet.IndexOf "@"
+                let starting=i
+                while i<tweet.Length && tweet.[i]<> ' ' do
+                    i<-i+1
+                let mentionedUser=int tweet.[starting+1..i-1]
+                if registry.Contains(mentionedUser) then /////IF MENTIONED USER IS REGISTERED////////
+                    if not(tweets.ContainsKey(mentionedUser)) then
+                        let temp=[tweet]
+                        tweets<-tweets.Add(mentionedUser,temp)
+                    else
+                        let mutable temp=tweets.[mentionedUser]
+                        temp<-[tweet] |> List.append temp
+                        tweets<-tweets.Add(mentionedUser,temp)
 
-            //printfn "%A" tweets
-            printfn "%A" hashTags
+
+            printfn "%A" tweets
+            //printfn "%A" hashTags
+            
 
 
 

@@ -12,8 +12,8 @@ iAmFollowing<-iAmFollowing.Add(1,m)
 printfn "%A" iAmFollowing
 iAmFollowing.ContainsKey(1)
 iAmFollowing.[1]=m
-let ke="Hello #Udit is great"
-let mutable t=ke.IndexOf "#"
+let ke="Hello @1 is great"
+let mutable t=ke.IndexOf "@"
 let h=t
 
 while t<ke.Length && ke.[t]<>' '  do
