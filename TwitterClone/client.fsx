@@ -14,7 +14,7 @@ open System.Diagnostics
 
 let pathToServer="akka://MySystem/user/server"
 let serverRef=select pathToServer Global.GlobalVar.system
-
+let rand=System.Random()
 module Users=
     let numUsers=10
     let numSubscribers=5
@@ -46,8 +46,22 @@ module Users=
         ///////// Generate Tweet by User//////////////////
         let generateTweet(userName:int)=
             for i=1 to numTweets do
-                let tweet= "number" + string i + "tweet from user #CPP " + string userName
+                let tweet= "number " + string i + " tweet from user " + string userName
                 serverRef<! Server.Tweet (userName,tweet)
+
+            /////Tweet with HashTag/////////
+            let tweet="I am user " + (string userName) + " and I think that Distributed Systems are fascinating! #COP5616isgreat"
+            serverRef<! Server.Tweet (userName,tweet)
+
+            ///// Tweet with Mention/////////
+            let mutable randUserPick=rand.Next()%numUsers
+            while randUserPick=userName do
+                randUserPick<-rand.Next()%numUsers
+            let tweet="I would like to mention user @" +  string randUserPick +  " because i am testing my application"
+            serverRef<! Server.Tweet (userName,tweet)
+
+
+        //////////Retweet one of the tweet from follower's list//////////////
 
         let rec listen() =
             actor {
@@ -61,6 +75,7 @@ module Users=
 
                 | "updated my following" ->
                     generateTweet(userName)
+
                 return! listen()
                         
             }
