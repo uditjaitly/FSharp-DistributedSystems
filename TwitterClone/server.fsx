@@ -16,6 +16,7 @@ module HostingServer=
     let mutable registry = Set.empty<int>
     let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
     let mutable tweets :Map<int,List<string>>=Map.empty
+    let mutable hashTags :Map<string,List<string>>=Map.empty
     let Server (mailbox: Actor<_>) =
         printfn "SERVER STARTED"
         
@@ -23,7 +24,7 @@ module HostingServer=
         let updateIAmFollowing (userName:int,subs:Set<int>) =
             
             iAmFollowing<-iAmFollowing.Add(userName,subs)
-            printfn "%A" iAmFollowing
+            //printfn "%A" iAmFollowing
     //////////Update Tweet Record//////////////
         let updateTweetRecord(userName:int,tweet:string) =
             if not (tweets.ContainsKey(userName)) then
@@ -34,7 +35,23 @@ module HostingServer=
                 let mutable temp=tweets.[userName]
                 temp<- [tweet] |> List.append temp
                 tweets<-tweets.Add(userName,temp)
-            printfn "%A" tweets
+            //////////////////HANDLE HASHTAGS//////////////////
+            if tweet.IndexOf "#" <> -1 then
+                let mutable i=tweet.IndexOf "#"
+                let starting=i
+                while i<tweet.Length && tweet.[i]<> ' ' do
+                    i<-i+1
+                let hashTag=tweet.[starting..i-1]
+                if not (hashTags.ContainsKey(hashTag)) then
+                    hashTags<-hashTags.Add(hashTag,[tweet])
+                else
+                    let mutable temp=hashTags.[hashTag]
+                    temp<-[tweet] |> List.append temp
+                    hashTags<-hashTags.Add(hashTag,temp)
+
+
+            //printfn "%A" tweets
+            printfn "%A" hashTags
 
 
 

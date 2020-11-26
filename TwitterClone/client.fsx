@@ -46,7 +46,7 @@ module Users=
         ///////// Generate Tweet by User//////////////////
         let generateTweet(userName:int)=
             for i=1 to numTweets do
-                let tweet= "number" + string i + "tweet from user" + string userName
+                let tweet= "number" + string i + "tweet from user #CPP " + string userName
                 serverRef<! Server.Tweet (userName,tweet)
 
         let rec listen() =
