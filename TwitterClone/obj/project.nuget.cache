@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "dgSpecHash": "JuCBOUU1THowB/R+JQac6CkXPmUGxl2JlEjGEFMV3EQj0NQDaoJsP8qSfAAA9Oq+gHg2PiGgaBKHBdAWNX9gow==",
+  "success": true,
+  "projectFilePath": "/Users/uditjaitly/Desktop/FSharp-DistributedSystems/TwitterClone/TwitterClone.fsproj",
+  "expectedPackageFiles": [
+    "/Users/uditjaitly/.nuget/packages/fsharp.core/4.7.2/fsharp.core.4.7.2.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/fsharp.data.sqlclient/2.0.7/fsharp.data.sqlclient.2.0.7.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/microsoft.netcore.platforms/2.0.0/microsoft.netcore.platforms.2.0.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/microsoft.win32.registry/4.5.0/microsoft.win32.registry.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/runtime.native.system.data.sqlclient.sni/4.4.0/runtime.native.system.data.sqlclient.sni.4.4.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/runtime.win-arm64.runtime.native.system.data.sqlclient.sni/4.4.0/runtime.win-arm64.runtime.native.system.data.sqlclient.sni.4.4.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/runtime.win-x64.runtime.native.system.data.sqlclient.sni/4.4.0/runtime.win-x64.runtime.native.system.data.sqlclient.sni.4.4.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/runtime.win-x86.runtime.native.system.data.sqlclient.sni/4.4.0/runtime.win-x86.runtime.native.system.data.sqlclient.sni.4.4.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.configuration.configurationmanager/4.5.0/system.configuration.configurationmanager.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.data.sqlclient/4.5.1/system.data.sqlclient.4.5.1.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.runtime.compilerservices.unsafe/4.5.0/system.runtime.compilerservices.unsafe.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.security.accesscontrol/4.5.0/system.security.accesscontrol.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.security.cryptography.protecteddata/4.5.0/system.security.cryptography.protecteddata.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.security.permissions/4.5.0/system.security.permissions.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.security.principal.windows/4.5.0/system.security.principal.windows.4.5.0.nupkg.sha512",
+    "/Users/uditjaitly/.nuget/packages/system.text.encoding.codepages/4.5.0/system.text.encoding.codepages.4.5.0.nupkg.sha512"
+  ],
+  "logs": []
+}
