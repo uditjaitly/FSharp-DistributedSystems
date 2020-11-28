@@ -13,7 +13,7 @@ open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
 open System.Diagnostics
-let numUsers=10
+let numUsers=1000
 let numSubscribers=5 
 
 printfn "%i" Client.Users.numUsers

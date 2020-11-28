@@ -10,14 +10,20 @@ open Akka.FSharp
 let rand=System.Random()
 type Command=
     | RegisterUser of int
+    | SendUpdate of string
     | MyFollowing of Set<int>*int
     | Tweet of int*string
     | Retweet of int
+    | QueryByUsername of int*int
+    | QueryReplyOfUsername of int*int*List<string>
+    | QueryByHashtag of int*string
+    | QueryReplyOfHashtag of int*string*List<string>
 module HostingServer=
     let mutable registry = Set.empty<int>
     let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
     let mutable tweets :Map<int,List<string>>=Map.empty
     let mutable hashTags :Map<string,List<string>>=Map.empty
+    let mutable queryData :List<string>=List.empty
     let Server (mailbox: Actor<_>) =
         printfn "SERVER STARTED"
         
@@ -74,20 +80,32 @@ module HostingServer=
             if iAmFollowing.ContainsKey(username) && iAmFollowing.[username].Count>0 then
                 let followSet=iAmFollowing.[username]
                 let followArray=Set.toArray(followSet)
+                
                 let selectedUserToRt=followArray.[rand.Next()%followArray.Length]
                 let userTweets=tweets.[selectedUserToRt]
                 let selectedTweetToRt=userTweets.[rand.Next()%userTweets.Length]
                 let modifiedRt=selectedTweetToRt + "-Retweet"
+                
                 if not(tweets.ContainsKey(username)) then               ///////Add retweet to user's feed////////////
                             let temp=[modifiedRt]
                             tweets<-tweets.Add(username,temp)
-                        else
+                         else
                             let mutable temp=tweets.[username]
                             temp<-[modifiedRt] |> List.append temp
                             tweets<-tweets.Add(username,temp)
-            printfn "%A" tweets
+            //printfn "%A" tweets
 
-
+        /////////////HANDLE QUERY BY USERNAME///////////////
+        let handleQueryByUsername(myUsername:int,subUsername:int)=
+            if tweets.ContainsKey(subUsername) then
+                queryData<-tweets.[subUsername]
+        
+        /////////////HANDLE QUERY BY HASHTAG//////
+        let handleQueryByHashtag(userName:int,hashtagString:string)=
+            if hashTags.ContainsKey(hashtagString) then
+                queryData<-hashTags.[hashtagString]
+            else
+                queryData<-["No tweets found containing the specified hashtag"]
 
         let rec listen() =
             actor {
@@ -97,18 +115,25 @@ module HostingServer=
                 match message with 
                 | RegisterUser user->
                      registry<-registry.Add(user)
-                     sender<! "user registered"
+                     sender<! SendUpdate "user registered"
                      printfn "%A" registry
                      return! listen()
                      
                    
                 | MyFollowing (setOfSubscriptions,userName) ->
                     updateIAmFollowing(userName,setOfSubscriptions)
-                    sender<! "updated my following"
+                    sender<! SendUpdate "updated my following"
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
                 | Retweet username->
                     doRetweet(username)
+                    sender<! SendUpdate "retweet complete for user"
+                | QueryByUsername (myUsername,subUsername) ->
+                    handleQueryByUsername(myUsername,subUsername)
+                    sender<! QueryReplyOfUsername (myUsername,subUsername,queryData)
+                | QueryByHashtag (userName,hashtagString)->
+                    handleQueryByHashtag (userName,hashtagString)
+                    sender<! QueryReplyOfHashtag(userName,hashtagString,queryData)
 
 
                 return! listen()

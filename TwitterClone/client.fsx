@@ -20,13 +20,16 @@ module Users=
     let numSubscribers=5
     let input=System.Environment.GetCommandLineArgs()
     let k=10
-    
+    let mutable counterUserRT=0
 
 
 
     let User userName numTweets numSubscribe numUsers (mailbox: Actor<_>) =
 
         let mutable setOfSubscriptions =  Set.empty<int>
+        let pSelf="akka://MySystem/user/" + string userName
+        let selfRef= select pSelf Global.GlobalVar.system
+        
 
 
 
@@ -60,12 +63,19 @@ module Users=
             let tweet="I would like to mention user @" +  string randUserPick +  " because i am testing my application"
             serverRef<! Server.Tweet (userName,tweet)
 
-
+            System.Threading.Thread.Sleep(5000)
             //////////Retweet////////////
-            serverRef<! Server.Retweet userName
+            serverRef<! Server.Retweet userName  //////////Retweet one of the tweet from follower's list//////////////
+        
+        let queryByUsername(userName:int)=
+            ////// Query tweets of a random subscriber///////
+            let selectedSub= Set.toArray(setOfSubscriptions).[rand.Next()%setOfSubscriptions.Count]
+            serverRef<! Server.QueryByUsername (userName,selectedSub)
 
+        let queryByHashtag(hashtagString:string) = 
+            serverRef<! Server.QueryByHashtag (userName,hashtagString)
 
-        //////////Retweet one of the tweet from follower's list//////////////
+       
 
         let rec listen() =
             actor {
@@ -73,12 +83,25 @@ module Users=
                 let sender = mailbox.Sender()
 
                 match message with
-                | "user registered" ->
+                | Server.SendUpdate "user registered" ->
                     printfn "User has been registered"
                     generateToSubscribe (userName, numTweets, numSubscribe)
 
-                | "updated my following" ->
+                | Server.SendUpdate "updated my following" ->
                     generateTweet(userName)
+                | Server.SendUpdate "done tweeting"->
+                    queryByUsername(userName)
+                | Server.SendUpdate "retweet complete for user"->
+                    counterUserRT<-counterUserRT+1
+                    if counterUserRT = numUsers then
+                        queryByUsername (userName)
+                | Server.QueryReplyOfUsername (userName,subUserName,queryData)->
+                    printfn "User %i queried User %i tweets which are:%A" userName subUserName queryData
+                    queryByHashtag ("#COP5616isgreat")
+                | Server.QueryReplyOfHashtag (userName,hashtagString,queryData)->
+                    printfn "User %i queried hashtag %s and results are:%A" userName hashtagString queryData
+                    
+
 
                 return! listen()
                         
