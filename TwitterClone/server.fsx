@@ -19,8 +19,11 @@ type Command=
     | QueryByHashtag of int*string
     | QueryReplyOfHashtag of int*string*List<string>
     | TweetUpdate of int*string
+    | Wallfeed of int*List<string>
+    | Disconnect of int
+    | Login of int
 module HostingServer=
-    let mutable registry = Set.empty<int>
+    let mutable registry :Map<int,bool>=Map.empty
     let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
     let mutable myFollowers :Map<int,Set<int>>=Map.empty
     let mutable tweets :Map<int,List<string>>=Map.empty
@@ -44,7 +47,7 @@ module HostingServer=
         let updateIAmFollowing (userName:int,subs:Set<int>) =
 
             iAmFollowing<-iAmFollowing.Add(userName,subs)
-            printfn "%A" iAmFollowing
+            //printfn "%A" iAmFollowing
     //////////Update Tweet Record//////////////
         let updateTweetRecord(userName:int,tweet:string) =
             if not (tweets.ContainsKey(userName)) then
@@ -62,7 +65,7 @@ module HostingServer=
                     let pathToUser="akka://MySystem/user/"+ string sub
                     let userRef=select pathToUser Global.GlobalVar.system
                     userRef<! TweetUpdate (userName,tweet)
-                    printfn "%i" sub
+                    //printfn "%i" sub
 
             
             //////////////////HANDLE HASHTAGS//////////////////
@@ -85,7 +88,7 @@ module HostingServer=
                 while i<tweet.Length && tweet.[i]<> ' ' do
                     i<-i+1
                 let mentionedUser=int tweet.[starting+1..i-1]
-                if registry.Contains(mentionedUser) then /////IF MENTIONED USER IS REGISTERED////////
+                if registry.ContainsKey(mentionedUser) then /////IF MENTIONED USER IS REGISTERED////////
                     if not(tweets.ContainsKey(mentionedUser)) then
                         let temp=[tweet]
                         tweets<-tweets.Add(mentionedUser,temp)
@@ -137,9 +140,10 @@ module HostingServer=
                 let sender = mailbox.Sender()
                 match message with 
                 | RegisterUser user->
-                     registry<-registry.Add(user)
+                     registry<-registry.Add(user,true)
+
                      sender<! SendUpdate "user registered"
-                     printfn "%A" registry
+                     //printfn "%A" registry
                      return! listen()
                      
                    
@@ -159,6 +163,14 @@ module HostingServer=
                 | QueryByHashtag (userName,hashtagString)->
                     handleQueryByHashtag (userName,hashtagString)
                     sender<! QueryReplyOfHashtag(userName,hashtagString,queryData)
+                | Disconnect userName ->
+                    registry<-registry.Add(userName,false)
+                    printfn "%A" registry
+                | Login userName->
+                    registry<-registry.Add(userName,true)
+                    printfn "%A" registry
+                    
+
 
 
                 return! listen()

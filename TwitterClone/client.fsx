@@ -76,7 +76,15 @@ module Users=
         let queryByHashtag(hashtagString:string) = 
             serverRef<! Server.QueryByHashtag (userName,hashtagString)
 
-       
+        let getWallFeed(userName)=
+            printfn "User %i feed is: %A" userName myFeedTweets
+
+        let disconnectMe(userName)=
+            if userName%2=0 then
+                serverRef<! Server.Disconnect userName
+            else
+                serverRef<! Server.Login userName
+
 
         let rec listen() =
             actor {
@@ -105,7 +113,12 @@ module Users=
                     queryByHashtag ("#COP5616isgreat")
                 | Server.QueryReplyOfHashtag (userName,hashtagString,queryData)->
                     //printfn "User %i queried hashtag %s and results are:%A" userName hashtagString queryData
-                    printfn "User %i feed is: %A" userName myFeedTweets
+                    getWallFeed(userName)
+                    disconnectMe(userName)
+                    
+
+                
+
                     
 
 
