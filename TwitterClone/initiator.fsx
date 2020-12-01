@@ -13,7 +13,7 @@ open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
 open System.Diagnostics
-let numUsers=1000
+let numUsers=10
 let numSubscribers=5 
 
 printfn "%i" Client.Users.numUsers
@@ -33,7 +33,7 @@ let Master (mailbox: Actor<_>) =
     for i=1 to numUsers do
         let userName=string i
         let numTweets=5
-        let numSubscribe=7
+        let numSubscribe=3
         let userName=string i
         let actorRef =
             Client.Users.User i numTweets numSubscribe numUsers

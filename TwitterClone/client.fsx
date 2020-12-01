@@ -21,7 +21,7 @@ module Users=
     let input=System.Environment.GetCommandLineArgs()
     let k=10
     let mutable counterUserRT=0
-
+   
 
 
     let User userName numTweets numSubscribe numUsers (mailbox: Actor<_>) =
@@ -29,6 +29,7 @@ module Users=
         let mutable setOfSubscriptions =  Set.empty<int>
         let pSelf="akka://MySystem/user/" + string userName
         let selfRef= select pSelf Global.GlobalVar.system
+        let mutable myFeedTweets=List.empty<string>
         
 
 
@@ -89,6 +90,10 @@ module Users=
 
                 | Server.SendUpdate "updated my following" ->
                     generateTweet(userName)
+                | Server.TweetUpdate (userName,tweet)->
+                    let mutable temp=myFeedTweets
+                    temp<- [tweet] |> List.append temp
+                    myFeedTweets<-temp
                 | Server.SendUpdate "done tweeting"->
                     queryByUsername(userName)
                 | Server.SendUpdate "retweet complete for user"->
@@ -96,10 +101,11 @@ module Users=
                     if counterUserRT = numUsers then
                         queryByUsername (userName)
                 | Server.QueryReplyOfUsername (userName,subUserName,queryData)->
-                    printfn "User %i queried User %i tweets which are:%A" userName subUserName queryData
+                    //printfn "User %i queried User %i tweets which are:%A" userName subUserName queryData
                     queryByHashtag ("#COP5616isgreat")
                 | Server.QueryReplyOfHashtag (userName,hashtagString,queryData)->
-                    printfn "User %i queried hashtag %s and results are:%A" userName hashtagString queryData
+                    //printfn "User %i queried hashtag %s and results are:%A" userName hashtagString queryData
+                    printfn "User %i feed is: %A" userName myFeedTweets
                     
 
 

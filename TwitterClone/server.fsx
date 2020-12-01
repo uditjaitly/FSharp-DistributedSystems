@@ -18,20 +18,33 @@ type Command=
     | QueryReplyOfUsername of int*int*List<string>
     | QueryByHashtag of int*string
     | QueryReplyOfHashtag of int*string*List<string>
+    | TweetUpdate of int*string
 module HostingServer=
     let mutable registry = Set.empty<int>
     let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
+    let mutable myFollowers :Map<int,Set<int>>=Map.empty
     let mutable tweets :Map<int,List<string>>=Map.empty
     let mutable hashTags :Map<string,List<string>>=Map.empty
     let mutable queryData :List<string>=List.empty
     let Server (mailbox: Actor<_>) =
         printfn "SERVER STARTED"
-        
-    //////////Update following list//////////
+    //////////////Update My followers map//////
+        let updateMyFollowers (username:int,subs:Set<int>)=
+            for sub in subs do
+                if not (myFollowers.ContainsKey(sub)) then
+                    let tempSet=Set.empty.Add(username)
+                    myFollowers<-myFollowers.Add(sub,tempSet)
+                else
+                    let mutable tempSet=myFollowers.[sub]
+                    tempSet<-tempSet.Add(username)
+                    myFollowers<-myFollowers.Add(sub,tempSet)
+            //printfn "%A" myFollowers
+
+    //////////Update My following map//////////
         let updateIAmFollowing (userName:int,subs:Set<int>) =
-            
+
             iAmFollowing<-iAmFollowing.Add(userName,subs)
-            //printfn "%A" iAmFollowing
+            printfn "%A" iAmFollowing
     //////////Update Tweet Record//////////////
         let updateTweetRecord(userName:int,tweet:string) =
             if not (tweets.ContainsKey(userName)) then
@@ -42,6 +55,16 @@ module HostingServer=
                 let mutable temp=tweets.[userName]
                 temp<- [tweet] |> List.append temp
                 tweets<-tweets.Add(userName,temp)
+
+            //////////Send tweet to the people who are following me///////////////
+            if myFollowers.ContainsKey(userName) then
+                for sub in myFollowers.[userName] do
+                    let pathToUser="akka://MySystem/user/"+ string sub
+                    let userRef=select pathToUser Global.GlobalVar.system
+                    userRef<! TweetUpdate (userName,tweet)
+                    printfn "%i" sub
+
+            
             //////////////////HANDLE HASHTAGS//////////////////
             if tweet.IndexOf "#" <> -1 then
                 let mutable i=tweet.IndexOf "#"
@@ -55,7 +78,7 @@ module HostingServer=
                     let mutable temp=hashTags.[hashTag]
                     temp<-[tweet] |> List.append temp
                     hashTags<-hashTags.Add(hashTag,temp)
-
+            /////////////HANDLE MENTIONS////////////////
             if tweet.IndexOf "@" <> -1 then
                 let mutable i=tweet.IndexOf "@"
                 let starting=i
@@ -121,7 +144,9 @@ module HostingServer=
                      
                    
                 | MyFollowing (setOfSubscriptions,userName) ->
+                    updateMyFollowers(userName,setOfSubscriptions)
                     updateIAmFollowing(userName,setOfSubscriptions)
+                    
                     sender<! SendUpdate "updated my following"
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
