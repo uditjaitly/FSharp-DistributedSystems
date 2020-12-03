@@ -21,12 +21,14 @@ module Users=
     let input=System.Environment.GetCommandLineArgs()
     let k=10
     let mutable counterUserRT=0
-   
+    let mutable myFollowersC :Map<int,Set<int>>=Map.empty
+    let mutable countUser=0
 
 
     let User userName numTweets numSubscribe numUsers (mailbox: Actor<_>) =
 
         let mutable setOfSubscriptions =  Set.empty<int>
+        
         let pSelf="akka://MySystem/user/" + string userName
         let selfRef= select pSelf Global.GlobalVar.system
         let mutable myFeedTweets=List.empty<string>
@@ -43,9 +45,23 @@ module Users=
         ////////Genererate to Subscribe/////////////////
         let generateToSubscribe (userName:int,numTweets:int,numSubscribe:int) = 
             for i =1 to numSubscribe do
-                if i<>userName && i+userName<100 then
-                    setOfSubscriptions<-setOfSubscriptions.Add(i+userName)
-            serverRef<! Server.MyFollowing (setOfSubscriptions,userName)
+                if i<>userName then
+                    setOfSubscriptions<-setOfSubscriptions.Add(i)
+                    if not (myFollowersC.ContainsKey(i)) then
+                        let tempSet=Set.empty.Add(userName)
+                        myFollowersC<-myFollowersC.Add(i,tempSet)
+                    else
+                        let mutable tS=myFollowersC.[i]
+                        tS<-tS.Add(userName)
+                        myFollowersC<-myFollowersC.Add(i,tS)
+            //countUser<-countUser+1
+            //printfn "%A" myFollowersC.[1].Count
+            serverRef<! Server.MyFollowing (setOfSubscriptions,myFollowersC,userName)
+            if userName=numUsers then
+                printfn "HERESA"
+                serverRef<! Server.MyFollowers(myFollowersC,userName)
+
+
 
         ///////// Generate Tweet by User//////////////////
         let generateTweet(userName:int)=
@@ -97,7 +113,7 @@ module Users=
                     printfn "User has been registered"
                     generateToSubscribe (userName, numTweets, numSubscribe)
 
-                | Server.SendUpdate "updated my following" ->
+                | Server.SendUpdate "updated my followers" ->
                     generateTweet(userName)
                 | Server.TweetUpdate (userName,tweet)->
                     let mutable temp=myFeedTweets
@@ -106,14 +122,15 @@ module Users=
                 // | Server.SendUpdate "done tweeting"->
                 //      queryByUsername(userName)
                 | Server.SendUpdate "retweet complete for user"->
-                    if userName=41 then
-                        queryByUsername (userName)
+                    counterUserRT<-counterUserRT+1
+                    if counterUserRT = numUsers then
+                        //if userName=65 then
+                            queryByUsername (userName)
                 | Server.QueryReplyOfUsername (userName,subUserName,queryData)->
                     //printfn "User %i queried User %i tweets which are:%A" userName subUserName queryData
                     queryByHashtag ("#COP5616isgreat")
                 | Server.QueryReplyOfHashtag (userName,hashtagString,queryData)->
                     //printfn "User %i queried hashtag %s and results are:%A" userName hashtagString queryData
-                    System.Threading.Thread.Sleep(10000)
                     getWallFeed(userName)
                     disconnectMe(userName)
 

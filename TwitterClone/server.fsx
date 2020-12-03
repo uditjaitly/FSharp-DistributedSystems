@@ -11,7 +11,8 @@ let rand=System.Random()
 type Command=
     | RegisterUser of int
     | SendUpdate of string
-    | MyFollowing of Set<int>*int
+    | MyFollowing of Set<int>*Map<int,Set<int>>*int
+    | MyFollowers of Map<int,Set<int>>*int
     | Tweet of int*string
     | Retweet of int
     | QueryByUsername of int*int
@@ -23,24 +24,23 @@ type Command=
     | Disconnect of int
     | Login of int
 module HostingServer=
+    let join (p:Map<'a,'b>) (q:Map<'a,'b>) = 
+        Map(Seq.concat [ (Map.toSeq p) ; (Map.toSeq q) ])
     let mutable registry :Map<int,bool>=Map.empty
     let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
     let mutable myFollowers :Map<int,Set<int>>=Map.empty
     let mutable tweets :Map<int,List<string>>=Map.empty
     let mutable hashTags :Map<string,List<string>>=Map.empty
     let mutable queryData :List<string>=List.empty
-    let Server (mailbox: Actor<_>) =
+    let Server numUsers (mailbox: Actor<_>) =
+        let mutable initComplete=false
         printfn "SERVER STARTED"
     //////////////Update My followers map//////
-        let updateMyFollowers (username:int,subs:Set<int>)=
-            for sub in subs do
-                if not (myFollowers.ContainsKey(sub)) then
-                    let tempSet=Set.empty.Add(username)
-                    myFollowers<-myFollowers.Add(sub,tempSet)
-                else
-                    let mutable tempSet=myFollowers.[sub]
-                    tempSet<-tempSet.Add(username)
-                    myFollowers<-myFollowers.Add(sub,tempSet)
+        let updateMyFollowers  (username:int,myFollowersC:Map<int,Set<int>>)=
+            myFollowers<-myFollowersC
+            printfn "%A" myFollowers.[1].Count
+
+           
 
 
     //////////Update My following map//////////
@@ -59,13 +59,7 @@ module HostingServer=
                 temp<- [tweet] |> List.append temp
                 tweets<-tweets.Add(userName,temp)
 
-            //////////Send tweet to the people who are following me///////////////
-            if myFollowers.ContainsKey(userName) then
-                for sub in myFollowers.[userName] do
-                    let pathToUser="akka://MySystem/user/"+ string sub
-                    let userRef=select pathToUser Global.GlobalVar.system
-                    userRef<! TweetUpdate (userName,tweet)
-                    //printfn "%i" sub
+            
 
             
             //////////////////HANDLE HASHTAGS//////////////////
@@ -97,7 +91,13 @@ module HostingServer=
                         temp<-[tweet] |> List.append temp
                         tweets<-tweets.Add(mentionedUser,temp)
 
-
+            //////////Send tweet to the people who are following me///////////////
+            if myFollowers.ContainsKey(userName) then
+                for sub in myFollowers.[userName] do
+                    let pathToUser="akka://MySystem/user/"+ string sub
+                    let userRef=select pathToUser Global.GlobalVar.system
+                    userRef<! TweetUpdate (userName,tweet)
+                    //printfn "%i" sub
             //printfn "%A" tweets
             //printfn "%A" hashTags
 
@@ -153,11 +153,32 @@ module HostingServer=
                      return! listen()
                      
                    
-                | MyFollowing (setOfSubscriptions,userName) ->
-                    updateMyFollowers(userName,setOfSubscriptions)
-                    updateIAmFollowing(userName,setOfSubscriptions)
+                | MyFollowing (setOfSubscriptions,myFollowersC,userName) ->
+                    
+                        //let k= updateMyFollowers(userName,myFollowersC) 
+                        let m=updateIAmFollowing(userName,setOfSubscriptions)
+                        ()
+                        //sender<! SendUpdate "updated my following"
+                | MyFollowers (myFollowersC,userName) ->
+                        myFollowers<-myFollowersC
+                        for i = 1 to numUsers do
 
-                    sender<! SendUpdate "updated my following"
+                            let pathUser="akka://MySystem/user/" + string i
+                            let userRef=select pathUser Global.GlobalVar.system
+                            
+                            userRef<! SendUpdate "updated my followers"
+
+                     
+
+
+             
+
+
+                        
+                    
+                    
+                   
+                    
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
                 | Retweet username->

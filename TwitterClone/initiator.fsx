@@ -13,7 +13,7 @@ open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
 open System.Diagnostics
-let numUsers=100
+let numUsers=1000
 let numSubscribers=5 
 
 printfn "%i" Client.Users.numUsers
@@ -25,7 +25,7 @@ let Master (mailbox: Actor<_>) =
 
     ///// SPAWN SERVER INSTANCE NAMED SERVER/////////
     let serverRef=
-        Server.HostingServer.Server 
+        Server.HostingServer.Server numUsers
         |> spawn Global.GlobalVar.system "server"
     System.Threading.Thread.Sleep(2000)
 
@@ -55,5 +55,8 @@ let boss =
     |> spawn Global.GlobalVar.system "master"
 
     
+
+
+
 
 
