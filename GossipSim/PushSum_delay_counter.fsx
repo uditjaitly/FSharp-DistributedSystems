@@ -9,19 +9,23 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=33
+let numOfNodes=10
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="2d grid"
-let algo = "gossip"
-let mutable inc=0
+let topology="full"
+let algo = "push sum"
 let mutable actorRef = select "akka://MySystem/user/" system
-let mutable b=System.Diagnostics.Stopwatch.StartNew()
 let round (x:float,d:float) =
     let rounded = Math.Round(d)
     if rounded < x then x + Math.Pow(10.0,-d) else rounded
 let bossRef= select "akka://MySystem/user/master" system
+let mutable c=0
+let mutable b=System.Diagnostics.Stopwatch.StartNew()
+let checkCounter = 
+    if c >8 then
+        printf "done"
+
 
 let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w : float)  =
     let mutable index=(rand.Next()%numberOfNeighbors)
@@ -30,7 +34,7 @@ let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w
     while index = 0 || randomNum =i || randomNum=0 do
         index<-(rand.Next()%numberOfNeighbors)
         randomNum<-neighbors.[index]
-
+    
 
     //randomNum<-neighbors.[randomNum]
     //printfn "%i Sending to %i" i randomNum
@@ -56,6 +60,7 @@ let Actor i j (mailbox: Actor<_>) =
     let mutable lastRatio= float -1
     let mutable currentRatio= float 1
     let mutable roundCounter=0
+    let mutable selfGossipCounter=0
     neighbors <- [-1] |> List.append neighbors
     //printfn "i=%i" i
     match topology with
@@ -100,7 +105,9 @@ let Actor i j (mailbox: Actor<_>) =
 
 
     let numberOfNeighbors= neighbors.Length
-    
+    let ss= string i
+    let p="akka://MySystem/user/" + ss
+    let selfRef= select p system
     
     
     
@@ -110,31 +117,32 @@ let Actor i j (mailbox: Actor<_>) =
     let rec loop n = actor {
         let! message = mailbox.Receive()
         let sender = mailbox.Sender()
+        
+
         match message with
         | (-1.0,-1.0) ->
             counter<-counter+1
             if counter = 10 then
                 proceed<-false
-                printfn "Counter is 10 for %i" i
                 k<-k+1
-                bossRef<! (1.0,1.0)
-            if counter = 1 then
-                async {
-                    while proceed do
-                        do! Async.Sleep 500
-                        pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
-                } |> Async.StartImmediate
-            else
+                //printfn "completed actor %i" i
+                bossRef<! (-1,-1)
+            else if counter = 1 then
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+                selfRef<!(1.0,1.0)
+            return! loop ()
+            
+
+            
+        | (1.0,1.0) ->
+            selfGossipCounter<-selfGossipCounter+1
+            if selfGossipCounter = 1000 then
+                selfGossipCounter<-0
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
 
-            return! loop ()
-
-
-
-
-
-
-
+            selfRef<!(1.0,1.0)
+            return! loop()
+            
 
         | (a,b) ->
             s<-s+a
@@ -144,6 +152,8 @@ let Actor i j (mailbox: Actor<_>) =
             currentRatio<-s/w
             currentRatio<-System.Math.Round (currentRatio,10)
             if lastRatio = currentRatio then
+                k<-k+1
+                printfn "CURR=LAST FOR ACTOR=%i" i
                 printfn "%fLAST RATIO=" lastRatio
                 roundCounter<-roundCounter+1
                 if(roundCounter<3) then
@@ -151,14 +161,15 @@ let Actor i j (mailbox: Actor<_>) =
                     lastRatio<-currentRatio
                     lastRatio<-System.Math.Round (lastRatio,10)
                     pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
-                    
                     return! loop()
                 if roundCounter = 3 then
+                    c<-c+1
                     printf "DONE"
                     sender <! "DONE"
+                    pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
+                    return! loop()
+
             else
-                
-                //k<-k+1
                 lastRatio<-currentRatio
                 lastRatio<-System.Math.Round (lastRatio,10)
                 pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
@@ -259,7 +270,7 @@ let Master i j (mailbox: Actor<_>) =
                         for j=1 to numOfNodes do
                             actorID<-actorID+1
                             let actorName = string actorID
-                            printfn "%i Actor Created" actorID
+                            //printfn "%i Actor Created" actorID
                             actorRef <-
                                 Actor actorID algo
                                 |> spawn system actorName
@@ -289,7 +300,7 @@ let Master i j (mailbox: Actor<_>) =
                         for j=1 to numOfNodes do
                             actorID<-actorID+1
                             let actorName = string actorID
-                            printfn "%i Actor Created" actorID
+                         //   printfn "%i Actor Created" actorID
                             actorRef <-
                                 Actor actorID algo
                                 |> spawn system actorName
@@ -323,11 +334,13 @@ let Master i j (mailbox: Actor<_>) =
         actor {
             let! message = mailbox.Receive()
             match message with
-            | (1.0,1.0) -> 
-                inc<-inc+1 
-                if(inc>=1085) then
+            | (-1,-1) -> 
+                c<-c+1
+                if c>=1000 then
                     b.Stop()
-                    printfn "%f" b.Elapsed.TotalMilliseconds
+
+                    printf "%A" (b.ElapsedMilliseconds)
+                    printf "Done"
 
 
             return! listen()
@@ -340,8 +353,10 @@ let boss =
     Master -1 algo
     |> spawn system "master"
 
+
+printf "%A" boss
 #time "on"
 
 
 printf "value of k=%i" k
-printf "value of c=%i" inc
+printf "value of c=%i" c

@@ -9,39 +9,78 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=33
+let numOfNodes=900
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="2d grid"
-let algo = "gossip"
-let mutable inc=0
+let topology="line"
+let algo = "push sum"
 let mutable actorRef = select "akka://MySystem/user/" system
-let mutable b=System.Diagnostics.Stopwatch.StartNew()
-let round (x:float,d:float) =
-    let rounded = Math.Round(d)
-    if rounded < x then x + Math.Pow(10.0,-d) else rounded
-let bossRef= select "akka://MySystem/user/master" system
 
-let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w : float)  =
+let bossRef= select "akka://MySystem/user/master" system
+let mutable c=0
+let mutable b=System.Diagnostics.Stopwatch.StartNew()
+let checkCounter = 
+    if c >8 then
+        printf "done"
+
+let mutable pendingActors= [1..900]
+
+type Values={Values : List<decimal>}
+
+type Command = 
+    | ValuesForPush of Values
+    | Gossip of string
+    | GossipSelf of string
+
+
+
+let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : decimal,w : decimal)  =
     let mutable index=(rand.Next()%numberOfNeighbors)
     let mutable randomNum=neighbors.[index]
+    let mutable num_string= string randomNum
+    let mutable pathToActor="akka://MySystem/user/" + num_string
+    let mutable itr=1
+    let mutable flag=0
+    let mutable freeNeighbors=[]
     //printfn "random num=%i" randomNum
     while index = 0 || randomNum =i || randomNum=0 do
         index<-(rand.Next()%numberOfNeighbors)
         randomNum<-neighbors.[index]
 
-
-    //randomNum<-neighbors.[randomNum]
-    //printfn "%i Sending to %i" i randomNum
-    let num_string= string randomNum
-    let pathToActor="akka://MySystem/user/" + num_string
-    //printfn "%s" pathToActor
+    num_string<- string randomNum
+    pathToActor<-"akka://MySystem/user/" + num_string
     actorRef <- select pathToActor system
     if algo = "gossip" then
-        actorRef<! (-1.0,-1.0)
-    else if algo = "push sum" then
-        actorRef<! (s,w)
+        actorRef<! Gossip "This is a very hot rumor"
+    else if algo = "push sum" && topology <> "full" then
+        if List.contains randomNum pendingActors then
+            num_string<- string randomNum
+            pathToActor<-"akka://MySystem/user/" + num_string
+        else
+            while itr< numberOfNeighbors do
+                if List.contains neighbors.[itr] pendingActors then
+                    freeNeighbors <- [neighbors.[itr]] |> List.append freeNeighbors
+                    flag<-1
+                itr<-itr+1   
+            if flag =1 then 
+                num_string<- string freeNeighbors.[rand.Next()%freeNeighbors.Length]
+                pathToActor<-"akka://MySystem/user/" + num_string
+            if flag = 0 then
+                num_string<- string (pendingActors.[rand.Next()%pendingActors.Length])
+                pathToActor<-"akka://MySystem/user/" + num_string         
+
+        actorRef <- select pathToActor system
+        actorRef<! ValuesForPush {Values = [s;w]}
+    else 
+        num_string<- string (pendingActors.[rand.Next()%pendingActors.Length])
+        pathToActor<-"akka://MySystem/user/" + num_string  
+        actorRef <- select pathToActor system
+        actorRef<! ValuesForPush {Values = [s;w]}
+
+       
+
+       
 ()
 
 
@@ -51,11 +90,12 @@ let Actor i j (mailbox: Actor<_>) =
     let mutable proceed=true
     let mutable neighbors = []
     let mutable numberOfNeighbors=0
-    let mutable s= float i
-    let mutable w= float 1
-    let mutable lastRatio= float -1
-    let mutable currentRatio= float 1
+    let mutable s= decimal i
+    let mutable w= decimal 1
+    let mutable lastRatio= decimal -1
+    let mutable currentRatio= decimal 1
     let mutable roundCounter=0
+    let mutable selfGossipCounter=0
     neighbors <- [-1] |> List.append neighbors
     //printfn "i=%i" i
     match topology with
@@ -82,7 +122,6 @@ let Actor i j (mailbox: Actor<_>) =
                 neighbors <- [i-1] |> List.append neighbors
             if ((i+1) <= (numOfNodes*numOfNodes) && (((i+1)%numOfNodes)<>1))  then
                 neighbors <- [i+1] |> List.append neighbors
-
         | "imperfect 2d grid"->
             if (i+numOfNodes) <= (numOfNodes*numOfNodes) then
                 neighbors <- [i+numOfNodes] |> List.append neighbors
@@ -92,75 +131,86 @@ let Actor i j (mailbox: Actor<_>) =
                 neighbors <- [i-1] |> List.append neighbors
             if ((i+1) <= (numOfNodes*numOfNodes) && (((i+1)%numOfNodes)<>1))  then
                 neighbors <- [i+1] |> List.append neighbors
-            
+
             neighbors <- [rand.Next()%(numOfNodes*numOfNodes)] |> List.append neighbors
         | _ -> ()
-    
+
 
 
 
     let numberOfNeighbors= neighbors.Length
-    
-    
-    
-    
-
-
+    let ss= string i
+    let p="akka://MySystem/user/" + ss
+    let selfRef= select p system
+    //printfn "num of neighbors for actor=%i is %i" i numberOfNeighbors
 
     let rec loop n = actor {
         let! message = mailbox.Receive()
         let sender = mailbox.Sender()
+
         match message with
-        | (-1.0,-1.0) ->
+        | Gossip g ->
             counter<-counter+1
             if counter = 10 then
                 proceed<-false
-                printfn "Counter is 10 for %i" i
                 k<-k+1
-                bossRef<! (1.0,1.0)
-            if counter = 1 then
-                async {
-                    while proceed do
-                        do! Async.Sleep 500
-                        pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
-                } |> Async.StartImmediate
-            else
+                //printfn "completed actor %i" i
+                bossRef<! (-1,-1)
+            else if counter = 1 then
                 pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
-
+                selfRef<! GossipSelf "Why am i talking to myself"
             return! loop ()
 
 
+        | GossipSelf sg ->
+            selfGossipCounter<-selfGossipCounter+1
+            if selfGossipCounter = 150 then
+                selfGossipCounter<-0
+                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+
+            selfRef<!GossipSelf "Why am i talking to myself"
+            return! loop()
 
 
-
-
-
-
-        | (a,b) ->
-            s<-s+a
-            w<-w+b
-            s<-s/2.0
-            w<-w/2.0
+        | ValuesForPush {Values= values} ->
+            s<-s+values.[0]
+            w<-w+values.[1]
+            s<-s/decimal 2.0
+            w<-w/decimal 2.0
             currentRatio<-s/w
-            currentRatio<-System.Math.Round (currentRatio,10)
+            currentRatio<-Math.Round(currentRatio,10)
+            //currentRatio<-System.Math.Round (currentRatio,10)
             if lastRatio = currentRatio then
-                printfn "%fLAST RATIO=" lastRatio
+                k<-k+1
+               // printfn "CURR=LAST FOR ACTOR=%i" i
+               // printfn "%ALAST RATIO=" lastRatio
                 roundCounter<-roundCounter+1
                 if(roundCounter<3) then
                   //  k<-k+8
                     lastRatio<-currentRatio
-                    lastRatio<-System.Math.Round (lastRatio,10)
+
+                   // lastRatio<-System.Math.Round (lastRatio,10)
                     pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
-                    
                     return! loop()
                 if roundCounter = 3 then
-                    printf "DONE"
-                    sender <! "DONE"
+                    c<-c+1
+                   // printfn "DONE%i" i
+                   // printfn "%ALAST RATIO=" lastRatio
+
+                    bossRef <! (-1,-1)
+                    pendingActors<-pendingActors |> List.filter ((<>) i)
+                    pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
+                    return! loop()
+                else
+
+                    pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
+                    return! loop()
+
             else
-                
-                //k<-k+1
                 lastRatio<-currentRatio
-                lastRatio<-System.Math.Round (lastRatio,10)
+
+
+               // lastRatio<-System.Math.Round (lastRatio,10)
                 pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
                 return! loop()
 
@@ -169,13 +219,6 @@ let Actor i j (mailbox: Actor<_>) =
         
     }
     loop ()
-
-
-
-
-
-
-
 
 
 
@@ -203,7 +246,7 @@ let Master i j (mailbox: Actor<_>) =
                 let num_string= string (rand.Next()%(numOfNodes))
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
-                randomActor <! (-1.0,-1.0)
+                randomActor <! Gossip "This is a very hot rumor"
                 b<-System.Diagnostics.Stopwatch.StartNew()
 
 
@@ -215,11 +258,13 @@ let Master i j (mailbox: Actor<_>) =
                         Actor i algo
                         |> spawn system actorName
                     ()
-                    printfn "%i Actor Created" i
+                    //printfn "%i Actor Created" i
                 let num_string= string (rand.Next()%(numOfNodes))
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
-                randomActor <! (float (num_string),1.0)
+                randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
+                b<-System.Diagnostics.Stopwatch.StartNew()
+
     |"line"->
         match algo with
             |"gossip"->
@@ -233,7 +278,7 @@ let Master i j (mailbox: Actor<_>) =
                 let num_string= string (rand.Next()%(numOfNodes))
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
-                randomActor <! (-1.0,-1.0)
+                randomActor <! Gossip "This is a very hot rumor"
                 b<-System.Diagnostics.Stopwatch.StartNew()
 
 
@@ -250,38 +295,41 @@ let Master i j (mailbox: Actor<_>) =
                 let num_string= string (rand.Next()%(numOfNodes))
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
-                randomActor <! (float (num_string),1.0)
+                randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
     |"2d grid"->
         
-                match algo with
-                |"gossip"-> 
-                    for i= 1 to numOfNodes do
-                        for j=1 to numOfNodes do
-                            actorID<-actorID+1
-                            let actorName = string actorID
-                            printfn "%i Actor Created" actorID
-                            actorRef <-
-                                Actor actorID algo
-                                |> spawn system actorName
-                    let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
-                    let pathToActor="akka://MySystem/user/" + num_string
-                    let randomActor = select pathToActor system
-                    randomActor <! (-1.0,-1.0)
+        match algo with
+            |"gossip"-> 
+                for i= 1 to numOfNodes do
+                    for j=1 to numOfNodes do
+                        actorID<-actorID+1
+                        let actorName = string actorID
+                        printfn "%i Actor Created" actorID
+                        actorRef <-
+                            Actor actorID algo
+                            |> spawn system actorName
+                let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
+                let pathToActor="akka://MySystem/user/" + num_string
+                let randomActor = select pathToActor system
+                randomActor <! Gossip "This is a very hot rumor"
+                b<-System.Diagnostics.Stopwatch.StartNew()
+
                  
 
-                |"push sum"->
-                    for i= 1 to numOfNodes do
-                        for j=1 to numOfNodes do
-                            actorID<-actorID+1
-                            let actorName = string actorID
-                            printfn "%i Actor Created" actorID
-                            actorRef <-
-                                Actor actorID algo
-                                |> spawn system actorName
-                    let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
-                    let pathToActor="akka://MySystem/user/" + num_string
-                    let randomActor = select pathToActor system
-                    randomActor <! (float (num_string),1.0)
+            |"push sum"->
+                for i= 1 to numOfNodes do
+                    for j=1 to numOfNodes do
+                        actorID<-actorID+1
+                        let actorName = string actorID
+                        printfn "%i Actor Created" actorID
+                        actorRef <-
+                            Actor actorID algo
+                            |> spawn system actorName
+                let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
+                let pathToActor="akka://MySystem/user/" + num_string
+                let randomActor = select pathToActor system
+                printf "%A" randomActor
+                randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
     |"imperfect 2d grid"->
         match algo with
                 |"gossip"-> 
@@ -289,15 +337,16 @@ let Master i j (mailbox: Actor<_>) =
                         for j=1 to numOfNodes do
                             actorID<-actorID+1
                             let actorName = string actorID
-                            printfn "%i Actor Created" actorID
+                         //   printfn "%i Actor Created" actorID
                             actorRef <-
                                 Actor actorID algo
                                 |> spawn system actorName
                     let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
-                    randomActor <! (-1.0,-1.0)
-                 
+                    randomActor <! Gossip "This is a very hot rumor"
+                    b<-System.Diagnostics.Stopwatch.StartNew()
+
 
                 |"push sum"->
                     for i= 1 to numOfNodes do
@@ -311,7 +360,11 @@ let Master i j (mailbox: Actor<_>) =
                     let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
-                    randomActor <! (float (num_string),1.0)
+                    printf "%A" randomActor
+
+                    randomActor <! ValuesForPush {Values = [decimal num_string;decimal 1]}
+                    b<-System.Diagnostics.Stopwatch.StartNew()
+
 
 
     
@@ -322,12 +375,16 @@ let Master i j (mailbox: Actor<_>) =
     let rec listen() =
         actor {
             let! message = mailbox.Receive()
+            let sender=mailbox.Sender()
             match message with
-            | (1.0,1.0) -> 
-                inc<-inc+1 
-                if(inc>=1085) then
+            | (-1,-1) -> 
+                c<-c+1
+                if c>=225 then
                     b.Stop()
-                    printfn "%f" b.Elapsed.TotalMilliseconds
+                    printfn "Done="
+                    printf "%A" (b.Elapsed.TotalMilliseconds)
+                    
+                    system.Terminate()
 
 
             return! listen()
@@ -336,12 +393,21 @@ let Master i j (mailbox: Actor<_>) =
 ()
 
 
+
 let boss = 
     Master -1 algo
     |> spawn system "master"
 
+
+printf "%A" boss
 #time "on"
 
 
 printf "value of k=%i" k
-printf "value of c=%i" inc
+printf "value of c=%i" c
+printf "presentActors=%A" pendingActors
+
+let gg=decimal 54
+Math.Round(gg/decimal 7,2)
+
+
