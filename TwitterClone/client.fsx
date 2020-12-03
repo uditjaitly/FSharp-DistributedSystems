@@ -16,7 +16,7 @@ let pathToServer="akka://MySystem/user/server"
 let serverRef=select pathToServer Global.GlobalVar.system
 let rand=System.Random()
 module Users=
-    let numUsers=10
+    let numUsers=100
     let numSubscribers=5
     let input=System.Environment.GetCommandLineArgs()
     let k=10
@@ -37,14 +37,14 @@ module Users=
 
 
         ////////////// REGISTER USER ///////
-        printfn "USER CREATED %A" serverRef
+        //printfn "USER CREATED %A" serverRef
         serverRef<! Server.RegisterUser userName
 
         ////////Genererate to Subscribe/////////////////
         let generateToSubscribe (userName:int,numTweets:int,numSubscribe:int) = 
             for i =1 to numSubscribe do
-                if i<>userName then
-                    setOfSubscriptions<-setOfSubscriptions.Add(i)
+                if i<>userName && i+userName<100 then
+                    setOfSubscriptions<-setOfSubscriptions.Add(i+userName)
             serverRef<! Server.MyFollowing (setOfSubscriptions,userName)
 
         ///////// Generate Tweet by User//////////////////
@@ -66,7 +66,8 @@ module Users=
 
             System.Threading.Thread.Sleep(5000)
             //////////Retweet////////////
-            serverRef<! Server.Retweet userName  //////////Retweet one of the tweet from follower's list//////////////
+            serverRef<! Server.Retweet userName  
+            //////////Retweet one of the tweet from follower's list//////////////
         
         let queryByUsername(userName:int)=
             ////// Query tweets of a random subscriber///////
@@ -102,24 +103,20 @@ module Users=
                     let mutable temp=myFeedTweets
                     temp<- [tweet] |> List.append temp
                     myFeedTweets<-temp
-                | Server.SendUpdate "done tweeting"->
-                    queryByUsername(userName)
+                // | Server.SendUpdate "done tweeting"->
+                //      queryByUsername(userName)
                 | Server.SendUpdate "retweet complete for user"->
-                    counterUserRT<-counterUserRT+1
-                    if counterUserRT = numUsers then
+                    if userName=41 then
                         queryByUsername (userName)
                 | Server.QueryReplyOfUsername (userName,subUserName,queryData)->
                     //printfn "User %i queried User %i tweets which are:%A" userName subUserName queryData
                     queryByHashtag ("#COP5616isgreat")
                 | Server.QueryReplyOfHashtag (userName,hashtagString,queryData)->
                     //printfn "User %i queried hashtag %s and results are:%A" userName hashtagString queryData
+                    System.Threading.Thread.Sleep(10000)
                     getWallFeed(userName)
                     disconnectMe(userName)
-                    
 
-                
-
-                    
 
 
                 return! listen()

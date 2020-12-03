@@ -13,7 +13,7 @@ open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
 open System.Diagnostics
-let numUsers=10
+let numUsers=100
 let numSubscribers=5 
 
 printfn "%i" Client.Users.numUsers
@@ -53,3 +53,7 @@ let Master (mailbox: Actor<_>) =
 let boss = 
     Master
     |> spawn Global.GlobalVar.system "master"
+
+    
+
+

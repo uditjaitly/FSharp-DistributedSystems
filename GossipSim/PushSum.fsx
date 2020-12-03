@@ -9,19 +9,17 @@ open Akka.FSharp
 open System.Diagnostics
 let system = System.create "MySystem" (Configuration.defaultConfig())
 let input=System.Environment.GetCommandLineArgs()
-let numOfNodes=33
+let numOfNodes=1000
 let rnd=System.Random()
 let rand=System.Random()
 let mutable k = 0
-let topology="2d grid"
-let algo = "gossip"
-let mutable inc=0
+let topology="full"
+let algo = "push sum"
 let mutable actorRef = select "akka://MySystem/user/" system
-let mutable b=System.Diagnostics.Stopwatch.StartNew()
+
 let round (x:float,d:float) =
     let rounded = Math.Round(d)
     if rounded < x then x + Math.Pow(10.0,-d) else rounded
-let bossRef= select "akka://MySystem/user/master" system
 
 let pickNeighbor (neighbors:_ list, numberOfNeighbors: int, i : int, s : float,w : float)  =
     let mutable index=(rand.Next()%numberOfNeighbors)
@@ -117,25 +115,14 @@ let Actor i j (mailbox: Actor<_>) =
                 proceed<-false
                 printfn "Counter is 10 for %i" i
                 k<-k+1
-                bossRef<! (1.0,1.0)
-            if counter = 1 then
+            if counter < 10 then  
                 async {
                     while proceed do
-                        do! Async.Sleep 500
+                        do! Async.Sleep 100
                         pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
-                } |> Async.StartImmediate
-            else
-                pickNeighbor (neighbors,numberOfNeighbors,i,s,w)
+                } |> Async.StartImmediate 
 
-            return! loop ()
-
-
-
-
-
-
-
-
+                return! loop ()
         | (a,b) ->
             s<-s+a
             w<-w+b
@@ -151,7 +138,6 @@ let Actor i j (mailbox: Actor<_>) =
                     lastRatio<-currentRatio
                     lastRatio<-System.Math.Round (lastRatio,10)
                     pickNeighbor(neighbors,numberOfNeighbors,i,s,w)
-                    
                     return! loop()
                 if roundCounter = 3 then
                     printf "DONE"
@@ -204,7 +190,6 @@ let Master i j (mailbox: Actor<_>) =
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! (-1.0,-1.0)
-                b<-System.Diagnostics.Stopwatch.StartNew()
 
 
 
@@ -234,8 +219,6 @@ let Master i j (mailbox: Actor<_>) =
                 let pathToActor="akka://MySystem/user/" + num_string
                 let randomActor = select pathToActor system
                 randomActor <! (-1.0,-1.0)
-                b<-System.Diagnostics.Stopwatch.StartNew()
-
 
 
 
@@ -266,7 +249,7 @@ let Master i j (mailbox: Actor<_>) =
                     let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
-                    randomActor <! (-1.0,-1.0)
+                    randomActor <! (float (num_string),1.0)
                  
 
                 |"push sum"->
@@ -296,7 +279,7 @@ let Master i j (mailbox: Actor<_>) =
                     let num_string= string (rand.Next()%(numOfNodes*numOfNodes))
                     let pathToActor="akka://MySystem/user/" + num_string
                     let randomActor = select pathToActor system
-                    randomActor <! (-1.0,-1.0)
+                    randomActor <! (float (num_string),1.0)
                  
 
                 |"push sum"->
@@ -323,11 +306,8 @@ let Master i j (mailbox: Actor<_>) =
         actor {
             let! message = mailbox.Receive()
             match message with
-            | (1.0,1.0) -> 
-                inc<-inc+1 
-                if(inc>=1085) then
-                    b.Stop()
-                    printfn "%f" b.Elapsed.TotalMilliseconds
+            | 1 -> 
+                //inc<-inc+1 
 
 
             return! listen()
@@ -344,4 +324,3 @@ let boss =
 
 
 printf "value of k=%i" k
-printf "value of c=%i" inc

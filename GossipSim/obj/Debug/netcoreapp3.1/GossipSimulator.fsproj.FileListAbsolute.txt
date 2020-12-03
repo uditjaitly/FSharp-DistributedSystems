@@ -1,3 +1,0 @@
-/Users/uditjaitly/Desktop/FSharp-DistributedSystems/GossipSim/obj/Debug/netcoreapp3.1/GossipSimulator.fsprojAssemblyReference.cache
-/Users/uditjaitly/Desktop/FSharp-DistributedSystems/GossipSim/obj/Debug/netcoreapp3.1/GossipSimulator.AssemblyInfoInputs.cache
-/Users/uditjaitly/Desktop/FSharp-DistributedSystems/GossipSim/obj/Debug/netcoreapp3.1/GossipSimulator.AssemblyInfo.fs

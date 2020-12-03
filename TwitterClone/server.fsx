@@ -41,7 +41,7 @@ module HostingServer=
                     let mutable tempSet=myFollowers.[sub]
                     tempSet<-tempSet.Add(username)
                     myFollowers<-myFollowers.Add(sub,tempSet)
-            //printfn "%A" myFollowers
+
 
     //////////Update My following map//////////
         let updateIAmFollowing (userName:int,subs:Set<int>) =
@@ -104,13 +104,19 @@ module HostingServer=
         ///////////////HANDLE RETWEETS////////////////
         let doRetweet(username:int) =
             if iAmFollowing.ContainsKey(username) && iAmFollowing.[username].Count>0 then
+                
                 let followSet=iAmFollowing.[username]
                 let followArray=Set.toArray(followSet)
                 
                 let selectedUserToRt=followArray.[rand.Next()%followArray.Length]
                 let userTweets=tweets.[selectedUserToRt]
                 let selectedTweetToRt=userTweets.[rand.Next()%userTweets.Length]
-                let modifiedRt=selectedTweetToRt + "-Retweet"
+                let modifiedRt=selectedTweetToRt + " ---Retweet by user " + string username
+                if myFollowers.ContainsKey(username) then
+                    for sub in myFollowers.[username] do
+                        let pathToUser="akka://MySystem/user/"+ string sub
+                        let userRef=select pathToUser Global.GlobalVar.system
+                        userRef<! TweetUpdate (username,modifiedRt)
                 
                 if not(tweets.ContainsKey(username)) then               ///////Add retweet to user's feed////////////
                             let temp=[modifiedRt]
@@ -150,7 +156,7 @@ module HostingServer=
                 | MyFollowing (setOfSubscriptions,userName) ->
                     updateMyFollowers(userName,setOfSubscriptions)
                     updateIAmFollowing(userName,setOfSubscriptions)
-                    
+
                     sender<! SendUpdate "updated my following"
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
