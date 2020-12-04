@@ -14,6 +14,7 @@ type Command=
     | MyFollowing of Set<int>*Map<int,Set<int>>*int
     | MyFollowers of Map<int,Set<int>>*int
     | Tweet of int*string
+    | GenerateTweet of int
     | Retweet of int
     | QueryByUsername of int*int
     | QueryReplyOfUsername of int*int*List<string>
@@ -21,8 +22,12 @@ type Command=
     | QueryReplyOfHashtag of int*string*List<string>
     | TweetUpdate of int*string
     | Wallfeed of int*List<string>
-    | Disconnect of int
+    | DisconnectMe of int
     | Login of int
+    | TweetUpdateAfterLogin of int*List<string>
+    | SelectedUserToObserve of int
+    | WallUpdated of int
+    | TweetAliveUsers
 module HostingServer=
     let join (p:Map<'a,'b>) (q:Map<'a,'b>) = 
         Map(Seq.concat [ (Map.toSeq p) ; (Map.toSeq q) ])
@@ -32,6 +37,9 @@ module HostingServer=
     let mutable tweets :Map<int,List<string>>=Map.empty
     let mutable hashTags :Map<string,List<string>>=Map.empty
     let mutable queryData :List<string>=List.empty
+    let mutable pendingTweets : Map<int, List<string>>= Map.empty
+    let mutable disconnectedUsers=0
+    
     let Server numUsers (mailbox: Actor<_>) =
         let mutable initComplete=false
         printfn "SERVER STARTED"
@@ -91,12 +99,22 @@ module HostingServer=
                         temp<-[tweet] |> List.append temp
                         tweets<-tweets.Add(mentionedUser,temp)
 
-            //////////Send tweet to the people who are following me///////////////
+            //////////Send tweet to the people who are following me and are online///////////////
             if myFollowers.ContainsKey(userName) then
                 for sub in myFollowers.[userName] do
-                    let pathToUser="akka://MySystem/user/"+ string sub
-                    let userRef=select pathToUser Global.GlobalVar.system
-                    userRef<! TweetUpdate (userName,tweet)
+                    if registry.[sub]=true then
+                        let pathToUser="akka://MySystem/user/"+ string sub
+                        let userRef=select pathToUser Global.GlobalVar.system
+                        userRef<! TweetUpdate (userName,tweet)
+                    else 
+                        //printfn "HERESAY"
+                        if not(pendingTweets.ContainsKey(sub)) then              ///If not online store in pending tweets/////
+                            let temp=[tweet]
+                            pendingTweets<-pendingTweets.Add(sub,temp)
+                        else
+                            let mutable temp=pendingTweets.[sub]
+                            temp<-[tweet] |> List.append temp
+                            pendingTweets<-pendingTweets.Add(sub,temp)
                     //printfn "%i" sub
             //printfn "%A" tweets
             //printfn "%A" hashTags
@@ -114,11 +132,29 @@ module HostingServer=
                 let modifiedRt=selectedTweetToRt + " ---Retweet by user " + string username
                 if myFollowers.ContainsKey(username) then
                     for sub in myFollowers.[username] do
-                        let pathToUser="akka://MySystem/user/"+ string sub
-                        let userRef=select pathToUser Global.GlobalVar.system
-                        userRef<! TweetUpdate (username,modifiedRt)
-                
-                if not(tweets.ContainsKey(username)) then               ///////Add retweet to user's feed////////////
+                        if registry.[sub]=true then                         //////// Check if the user is online, if yes, send tweet///
+                            let pathToUser="akka://MySystem/user/"+ string sub
+                            let userRef=select pathToUser Global.GlobalVar.system
+                            userRef<! TweetUpdate (username,modifiedRt)
+                        else
+                            
+                            if not(pendingTweets.ContainsKey(sub)) then              ///If not online store in pending tweets/////
+                                let temp=[modifiedRt]
+                                pendingTweets<-pendingTweets.Add(sub,temp)
+                            else
+                                let mutable temp=pendingTweets.[sub]
+                                temp<-[modifiedRt] |> List.append temp
+                                pendingTweets<-pendingTweets.Add(sub,temp)
+
+
+
+
+
+
+
+
+
+                if not(tweets.ContainsKey(username)) then
                             let temp=[modifiedRt]
                             tweets<-tweets.Add(username,temp)
                          else
@@ -138,6 +174,14 @@ module HostingServer=
                 queryData<-hashTags.[hashtagString]
             else
                 queryData<-["No tweets found containing the specified hashtag"]
+
+        //////////////HANDLE LOGIN////////////////
+        let handleLogIn(userName:int)=
+            if pendingTweets.ContainsKey(userName) then
+                let pathToUser="akka://MySystem/user/"+ string userName
+                let userRef=select pathToUser Global.GlobalVar.system
+                userRef<! TweetUpdateAfterLogin (userName,pendingTweets.[userName])
+                pendingTweets<-pendingTweets.Add(userName,[])
 
         let rec listen() =
             actor {
@@ -162,23 +206,10 @@ module HostingServer=
                 | MyFollowers (myFollowersC,userName) ->
                         myFollowers<-myFollowersC
                         for i = 1 to numUsers do
+                                let pathUser="akka://MySystem/user/" + string i
+                                let userRef=select pathUser Global.GlobalVar.system
+                                userRef<! SendUpdate "updated my followers"
 
-                            let pathUser="akka://MySystem/user/" + string i
-                            let userRef=select pathUser Global.GlobalVar.system
-                            
-                            userRef<! SendUpdate "updated my followers"
-
-                     
-
-
-             
-
-
-                        
-                    
-                    
-                   
-                    
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
                 | Retweet username->
@@ -190,13 +221,40 @@ module HostingServer=
                 | QueryByHashtag (userName,hashtagString)->
                     handleQueryByHashtag (userName,hashtagString)
                     sender<! QueryReplyOfHashtag(userName,hashtagString,queryData)
-                | Disconnect userName ->
+                | DisconnectMe userName ->
                     registry<-registry.Add(userName,false)
+                    disconnectedUsers<-disconnectedUsers+1
                     printfn "%A" registry
+                    if(disconnectedUsers>=numUsers/2) then
+                        //printfn "%i" disconnectedUsers
+                        sender<! SendUpdate "disconnection of half users completed"
                 | Login userName->
                     registry<-registry.Add(userName,true)
-                    printfn "%A" registry
                     
+                    printfn "User which logged in is :%i" userName
+                    handleLogIn(userName)
+                    printfn "%A" registry
+                | WallUpdated userName->
+                    printfn "ack received"
+                    for i = 1 to numUsers do
+                        if i%2 = 0 then
+                            let pathUser="akka://MySystem/user/" + string i
+                            let userRef=select pathUser Global.GlobalVar.system
+                            userRef<! DisconnectMe i
+                            registry<-registry.Add(i,false)
+                | TweetAliveUsers ->
+                    for i=1 to numUsers do
+                        if i%2<>0 then
+                            let pathUser="akka://MySystem/user/" + string i
+                            let userRef=select pathUser Global.GlobalVar.system
+                            userRef<!GenerateTweet i
+
+
+
+
+
+
+
 
 
 

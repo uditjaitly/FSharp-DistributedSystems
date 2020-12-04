@@ -1,10 +1,8 @@
 open System
 
-let mutable registry :Map<int,bool>=Map.empty
+let mutable registry :Map<int,List<string>>=Map.empty
 
-registry<-registry.Add(1,false)
-registry<-registry.Add(1,true)
+let l=["dsaf" ; "dsaff"]
+registry<-registry.Add(1,l)
+registry<-registry.Add(1,[])
 printfn "%A" registry
-
-let a=[|1,2,3|]
-printfn "%i" a.length

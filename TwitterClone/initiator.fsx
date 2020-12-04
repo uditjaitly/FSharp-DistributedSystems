@@ -32,8 +32,8 @@ let Master (mailbox: Actor<_>) =
     ////// SPAWNING USERS////////////////////
     for i=1 to numUsers do
         let userName=string i
-        let numTweets=5
-        let numSubscribe=3
+        let numTweets=2
+        let numSubscribe=200
         let userName=string i
         let actorRef =
             Client.Users.User i numTweets numSubscribe numUsers
