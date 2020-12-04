@@ -46,7 +46,7 @@ module HostingServer=
     //////////////Update My followers map//////
         let updateMyFollowers  (username:int,myFollowersC:Map<int,Set<int>>)=
             myFollowers<-myFollowersC
-            printfn "%A" myFollowers.[1].Count
+            //printfn "%A" myFollowers.[1].Count
 
            
 
@@ -127,40 +127,42 @@ module HostingServer=
                 let followArray=Set.toArray(followSet)
                 
                 let selectedUserToRt=followArray.[rand.Next()%followArray.Length]
-                let userTweets=tweets.[selectedUserToRt]
-                let selectedTweetToRt=userTweets.[rand.Next()%userTweets.Length]
-                let modifiedRt=selectedTweetToRt + " ---Retweet by user " + string username
-                if myFollowers.ContainsKey(username) then
-                    for sub in myFollowers.[username] do
-                        if registry.[sub]=true then                         //////// Check if the user is online, if yes, send tweet///
-                            let pathToUser="akka://MySystem/user/"+ string sub
-                            let userRef=select pathToUser Global.GlobalVar.system
-                            userRef<! TweetUpdate (username,modifiedRt)
-                        else
-                            
-                            if not(pendingTweets.ContainsKey(sub)) then              ///If not online store in pending tweets/////
-                                let temp=[modifiedRt]
-                                pendingTweets<-pendingTweets.Add(sub,temp)
+                if(tweets.ContainsKey(selectedUserToRt)) then
+                    let userTweets=tweets.[selectedUserToRt]
+
+                    let selectedTweetToRt=userTweets.[rand.Next()%userTweets.Length]
+                    let modifiedRt=selectedTweetToRt + " ---Retweet by user " + string username
+                    if myFollowers.ContainsKey(username) then
+                        for sub in myFollowers.[username] do
+                            if registry.[sub]=true then                         //////// Check if the user is online, if yes, send tweet///
+                                let pathToUser="akka://MySystem/user/"+ string sub
+                                let userRef=select pathToUser Global.GlobalVar.system
+                                userRef<! TweetUpdate (username,modifiedRt)
                             else
-                                let mutable temp=pendingTweets.[sub]
+                                
+                                if not(pendingTweets.ContainsKey(sub)) then              ///If not online store in pending tweets/////
+                                    let temp=[modifiedRt]
+                                    pendingTweets<-pendingTweets.Add(sub,temp)
+                                else
+                                    let mutable temp=pendingTweets.[sub]
+                                    temp<-[modifiedRt] |> List.append temp
+                                    pendingTweets<-pendingTweets.Add(sub,temp)
+
+
+
+
+
+
+
+
+
+                    if not(tweets.ContainsKey(username)) then
+                                let temp=[modifiedRt]
+                                tweets<-tweets.Add(username,temp)
+                             else
+                                let mutable temp=tweets.[username]
                                 temp<-[modifiedRt] |> List.append temp
-                                pendingTweets<-pendingTweets.Add(sub,temp)
-
-
-
-
-
-
-
-
-
-                if not(tweets.ContainsKey(username)) then
-                            let temp=[modifiedRt]
-                            tweets<-tweets.Add(username,temp)
-                         else
-                            let mutable temp=tweets.[username]
-                            temp<-[modifiedRt] |> List.append temp
-                            tweets<-tweets.Add(username,temp)
+                                tweets<-tweets.Add(username,temp)
             //printfn "%A" tweets
 
         /////////////HANDLE QUERY BY USERNAME///////////////
