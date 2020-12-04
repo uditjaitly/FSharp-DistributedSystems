@@ -1,5 +1,6 @@
 #load "global.fsx"
 #load "server.fsx"
+#r "nuget: MathNet.Numerics.FSharp"
 #r "nuget: System.Data.SqlClient" 
 #r "nuget: Akka.FSharp" 
 #r "nuget: Akka.TestKit" 
@@ -10,14 +11,15 @@ open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
 open System.Diagnostics
+open MathNet.Numerics.Distributions
 
 
 let pathToServer="akka://MySystem/user/server"
 let serverRef=select pathToServer Global.GlobalVar.system
 let rand=System.Random()
 module Users=
-    let numUsers=500
-    let numSubscribers=100
+    let numUsers=1000
+    let numSubscribers=2
     let input=System.Environment.GetCommandLineArgs()
     let mutable k=0
     let mutable counterUserRT=0
@@ -25,6 +27,12 @@ module Users=
     let mutable countUser=0
     let mutable afterDisconnection=false
     let mutable disconnected=0
+    let maxFollowers=(int)(0.2*(float)numUsers)
+    let followersArray=Array.create numUsers 0
+    let zInstance=new Zipf(1.0,maxFollowers)
+    zInstance.Samples(followersArray)
+    printfn "%A" followersArray
+    printfn "%i" followersArray.[87]
     
 
     let User userName numTweets numSubscribe numUsers (mailbox: Actor<_>) =
@@ -46,16 +54,17 @@ module Users=
 
         ////////Genererate to Subscribe/////////////////
         let generateToSubscribe (userName:int,numTweets:int,numSubscribe:int) = 
-            for i =1 to numSubscribe do
+            for i =1 to followersArray.[userName-1] do
                 if i<>userName then
-                    setOfSubscriptions<-setOfSubscriptions.Add(i)
-                    if not (myFollowersC.ContainsKey(i)) then
+                    let genFollow=(rand.Next()%numUsers)+1
+                    setOfSubscriptions<-setOfSubscriptions.Add(genFollow)
+                    if not (myFollowersC.ContainsKey(genFollow)) then
                         let tempSet=Set.empty.Add(userName)
-                        myFollowersC<-myFollowersC.Add(i,tempSet)
+                        myFollowersC<-myFollowersC.Add(genFollow,tempSet)
                     else
-                        let mutable tS=myFollowersC.[i]
+                        let mutable tS=myFollowersC.[genFollow]
                         tS<-tS.Add(userName)
-                        myFollowersC<-myFollowersC.Add(i,tS)
+                        myFollowersC<-myFollowersC.Add(genFollow,tS)
             //countUser<-countUser+1
             //printfn "%A" myFollowersC.[1].Count
             serverRef<! Server.MyFollowing (setOfSubscriptions,myFollowersC,userName)
@@ -97,7 +106,7 @@ module Users=
             serverRef<! Server.QueryByHashtag (userName,hashtagString)
 
         let getWallFeed(userName)=
-                printfn "User %i feed is: %A" userName myFeedTweets
+                printfn "User %i feed is: %A- was following %i users" userName myFeedTweets followersArray.[userName-1]
             
 
   

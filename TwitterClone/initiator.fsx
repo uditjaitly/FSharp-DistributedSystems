@@ -2,6 +2,8 @@
 #load "server.fsx"
 #load "client.fsx"
 #time "on"
+#r "nuget: MathNet.Numerics.Distributions"
+
 #r "nuget: System.Data.SqlClient" 
 #r "nuget: Akka.FSharp" 
 #r "nuget: Akka.TestKit" 
@@ -13,8 +15,10 @@ open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
 open System.Diagnostics
-let numUsers=500
-let numSubscribers=100 
+open MathNet.Numerics.Distributions
+
+let numUsers=1000
+let numSubscribers=2 
 
 printfn "%i" Client.Users.numUsers
 //let system = System.create "MySystem" (Configuration.defaultConfig())

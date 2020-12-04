@@ -7,6 +7,8 @@ open Global
 open Akka.Actor
 open Akka.Configuration
 open Akka.FSharp
+
+
 let rand=System.Random()
 type Command=
     | RegisterUser of int
@@ -238,6 +240,7 @@ module HostingServer=
                     printfn "%A" registry
                 | WallUpdated userName->
                     printfn "ack received"
+                    
                     for i = 1 to numUsers do
                         if i%2 = 0 then
                             let pathUser="akka://MySystem/user/" + string i
