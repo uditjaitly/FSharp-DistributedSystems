@@ -25,7 +25,7 @@
 
     form.addEventListener('submit',(event)=>{
         event.preventDefault();
-        doSend(form.elements['fname'].value)
+        doSend(("register" + "+" + form.elements['fname'].value + "+" + form.elements['lname'].value + "+"  + form.elements['username'].value +"+"+ form.elements['password'].value))
     });
 
 

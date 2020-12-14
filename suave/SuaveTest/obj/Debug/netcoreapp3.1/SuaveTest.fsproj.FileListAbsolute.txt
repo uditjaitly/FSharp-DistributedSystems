@@ -42,3 +42,4 @@
 /Users/uditjaitly/Desktop/untitled folder/FSharp-DistributedSystems/suave/SuaveTest/obj/Debug/netcoreapp3.1/SuaveTest.dll
 /Users/uditjaitly/Desktop/untitled folder/FSharp-DistributedSystems/suave/SuaveTest/obj/Debug/netcoreapp3.1/SuaveTest.pdb
 /Users/uditjaitly/Desktop/untitled folder/FSharp-DistributedSystems/suave/SuaveTest/obj/Debug/netcoreapp3.1/SuaveTest.genruntimeconfig.cache
+/Users/uditjaitly/Desktop/untitled folder/FSharp-DistributedSystems/suave/SuaveTest/bin/Debug/netcoreapp3.1/FSharp.Json.dll

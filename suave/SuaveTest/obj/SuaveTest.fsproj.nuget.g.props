@@ -18,6 +18,7 @@
   <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
     <PkgFSharp_Core Condition=" '$(PkgFSharp_Core)' == '' ">/Users/uditjaitly/.nuget/packages/fsharp.core/5.0.0</PkgFSharp_Core>
     <PkgSuave Condition=" '$(PkgSuave)' == '' ">/Users/uditjaitly/.nuget/packages/suave/2.6.0</PkgSuave>
+    <PkgFSharp_Json Condition=" '$(PkgFSharp_Json)' == '' ">/Users/uditjaitly/.nuget/packages/fsharp.json/0.4.0</PkgFSharp_Json>
     <PkgAkka Condition=" '$(PkgAkka)' == '' ">/Users/uditjaitly/.nuget/packages/akka/1.4.12</PkgAkka>
     <PkgAkka_FSharp Condition=" '$(PkgAkka_FSharp)' == '' ">/Users/uditjaitly/.nuget/packages/akka.fsharp/1.4.12</PkgAkka_FSharp>
   </PropertyGroup>

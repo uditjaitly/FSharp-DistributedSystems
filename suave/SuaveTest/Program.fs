@@ -18,6 +18,7 @@ open Suave.Sockets
 open Suave.Sockets.Control
 open Suave.WebSocket
 open System.Text
+open FSharp.Json
 
  let system = System.create "MySystem" (Configuration.defaultConfig())
 type Command=
@@ -44,6 +45,7 @@ type Command=
 let join (p:Map<'a,'b>) (q:Map<'a,'b>) = 
     Map(Seq.concat [ (Map.toSeq p) ; (Map.toSeq q) ])
 let mutable registry :Map<int,bool>=Map.empty
+let mutable numberAndPassword :Map<int,string>=Map.empty 
 let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
 let mutable myFollowers :Map<int,Set<int>>=Map.empty
 let mutable tweets :Map<int,List<string>>=Map.empty
@@ -295,8 +297,32 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
       // the last element is the FIN byte, explained later
       | (Text, data, true) ->
         // the message can be converted to a string
+        let mutable response=""
+        
+
         let str = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
-        let response = sprintf "MARNEE MADE THIS response to %s" str
+        //let strNotJSON = Json.deseriaçlize<Foo> testjson
+        
+        //let values = str.Split '+'
+        
+        //printfn "%A" values
+        if str.Contains("register") then
+          let values = str.Split '+'
+          if values.Length>1 && values.[0]="register"  then
+            
+            let userNumber=values.[3] |> int
+            let password=values.[4]
+            
+            ()
+            if(numberAndPassword.ContainsKey(userNumber)) then
+               response<-sprintf "USER NUMBER ALREADY REGISTERED"
+            else
+               numberAndPassword<-numberAndPassword.Add(userNumber,password)
+            //    registry<-registry.Add(int userNumber,true)
+               response <- sprintf "SIGN UP SUCCESSFULL %s" str
+        // else
+        //   response <- sprintf "MARNEE MADE THIS response to %s" str
+         
 
         // the response needs to be converted to a ByteSegment
         let byteResponse =
