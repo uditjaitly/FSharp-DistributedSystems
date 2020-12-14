@@ -19,16 +19,57 @@
     </form>
 </div>
 
+
+<div>
+  <h1>Login</h1>
+
+  <form id="login">
+      <label for="username">Username:</label><br>
+      <input type="text" id="username" name="username"><br>
+      <label for="password">Password:</label><br>
+      <input type="text" id="password" name="password">
+      
+
+      <input type="submit"></button>
+  </form>
+</div>
+
+<div>
+  <h1>Usernumber to follow</h1>
+
+  <form id="follow">
+      <label for="username">Username:</label><br>
+      <input type="text" id="username" name="username"><br>
+
+      
+
+      <input type="submit"></button>
+  </form>
+</div>
+
 <script language="javascript" type="text/javascript">
 
-    let form=document.getElementById('registration');
+    let formRegistration=document.getElementById('registration');
 
-    form.addEventListener('submit',(event)=>{
+    formRegistration.addEventListener('submit',(event)=>{
         event.preventDefault();
-        doSend(("register" + "+" + form.elements['fname'].value + "+" + form.elements['lname'].value + "+"  + form.elements['username'].value +"+"+ form.elements['password'].value))
+        doSend(("register" + "+" + formRegistration.elements['fname'].value + "+" + formRegistration.elements['lname'].value + "+"  + formRegistration.elements['username'].value +"+"+ formRegistration.elements['password'].value))
     });
+    
+    let formLogin=document.getElementById('login');
 
+    formLogin.addEventListener('submit',(event)=>{
+      event.preventDefault();
+      doSend("login"+ "+" + formLogin.elements['username'].value + "+" + formLogin.elements['password'].value)
 
+    })
+
+    let formFollow=document.getElementById('follow');
+
+    formFollow.addEventListener('submit',(event)=>{
+      event.preventDefault();
+      doSend("follow"+ "+" + formFollow.elements['username'].value)
+    })
 
 
 

@@ -24,8 +24,8 @@ open FSharp.Json
 type Command=
     | RegisterUser of int
     | SendUpdate of string
-    | MyFollowing of Set<int>*Map<int,Set<int>>*int
-    | MyFollowers of Map<int,Set<int>>*int
+    | MyFollowing of Set<int>*int
+    | MyFollowers of Set<int>*int
     | Tweet of int*string
     | GenerateTweet of int
     | Retweet of int
@@ -46,6 +46,7 @@ let join (p:Map<'a,'b>) (q:Map<'a,'b>) =
     Map(Seq.concat [ (Map.toSeq p) ; (Map.toSeq q) ])
 let mutable registry :Map<int,bool>=Map.empty
 let mutable numberAndPassword :Map<int,string>=Map.empty 
+let mutable numberAndWebsocket :Map<int,WebSocket>=Map.empty
 let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
 let mutable myFollowers :Map<int,Set<int>>=Map.empty
 let mutable tweets :Map<int,List<string>>=Map.empty
@@ -58,17 +59,30 @@ let Server numUsers (mailbox: Actor<_>) =
     let mutable initComplete=false
     printfn "SERVER STARTED"
 //////////////Update My followers map//////
-    let updateMyFollowers  (username:int,myFollowersC:Map<int,Set<int>>)=
-        myFollowers<-myFollowersC
+    let updateMyFollowers  (userNameIsFollowing:Set<int>,userNameToFollow:int)=
+        let t=userNameIsFollowing.MaximumElement
+        let tempSet=Set.empty.Add(userNameToFollow)
+        if (myFollowers.ContainsKey(t)) then
+          let mutable temp=myFollowers.[t]
+          temp<-temp.Add(userNameToFollow)
+          myFollowers<-myFollowers.Add(t,temp)
+        else
+          myFollowers<-myFollowers.Add(t,tempSet)
+        printfn "%A" myFollowers
         //printfn "%A" myFollowers.[1].Count
-
+        
        
 
 
 //////////Update My following map//////////
     let updateIAmFollowing (userName:int,subs:Set<int>) =
-
-        iAmFollowing<-iAmFollowing.Add(userName,subs)
+        if iAmFollowing.ContainsKey(userName) then
+          let mutable temp=iAmFollowing.[userName]
+          temp<-temp.Add(subs.MaximumElement)
+          iAmFollowing<-iAmFollowing.Add(userName,temp)
+        else
+          iAmFollowing<-iAmFollowing.Add(userName,subs)
+        //printfn "%A" iAmFollowing.[userName]
         //printfn "%A" iAmFollowing
 //////////Update Tweet Record//////////////
     let updateTweetRecord(userName:int,tweet:string) =
@@ -213,14 +227,14 @@ let Server numUsers (mailbox: Actor<_>) =
                      return! listen()
                      
                    
-                | MyFollowing (setOfSubscriptions,myFollowersC,userName) ->
+                | MyFollowing (setOfSubscriptions,userName) ->
                     
                         //let k= updateMyFollowers(userName,myFollowersC) 
                         let m=updateIAmFollowing(userName,setOfSubscriptions)
                         ()
                         //sender<! SendUpdate "updated my following"
-                | MyFollowers (myFollowersC,userName) ->
-                        myFollowers<-myFollowersC
+                | MyFollowers (userNameIsFollowing,userNameToFollow) ->
+                        updateMyFollowers(userNameIsFollowing,userNameToFollow)
                         // for i = 1 to numUsers do
                         //         let pathUser="akka://MySystem/user/" + string i
                         //         //let userRef=select pathUser Global.GlobalVar.system
@@ -276,7 +290,7 @@ let serverRef=
   |> spawn system "server"
 
 
-
+let mutable userNumber= -1
 let ws (webSocket : WebSocket) (context: HttpContext) =
   socket {
     // if `loop` is set to false, the server will stop receiving messages
@@ -303,14 +317,15 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
         let str = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
         //let strNotJSON = Json.deseriaçlize<Foo> testjson
         
+        
         //let values = str.Split '+'
         
         //printfn "%A" values
-        if str.Contains("register") then
+        if str.Contains("register") then                                    ////////////////REGISTRATION////////////////////
           let values = str.Split '+'
           if values.Length>1 && values.[0]="register"  then
             
-            let userNumber=values.[3] |> int
+            userNumber<-values.[3] |> int
             let password=values.[4]
             
             ()
@@ -319,7 +334,35 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
             else
                numberAndPassword<-numberAndPassword.Add(userNumber,password)
             //    registry<-registry.Add(int userNumber,true)
+               numberAndWebsocket<-numberAndWebsocket.Add(userNumber,webSocket)
                response <- sprintf "SIGN UP SUCCESSFULL %s" str
+
+
+        else if str.Contains("login") then
+          let values = str.Split '+'
+          if values.Length>1 then
+            userNumber<-values.[1] |> int
+            let password=values.[2]
+
+            if numberAndPassword.ContainsKey(userNumber) then
+              if numberAndPassword.[userNumber]=password then
+                registry<-registry.Add(int userNumber,true)
+                response <- sprintf "LOGIN SUCCESSFULL %s" str
+              else
+                response <- sprintf "INCORRECT PASSWORD %s" str
+            else
+              response <- sprintf "USERNUMBER NOT REGISTERED %s" str
+
+
+        else if str.Contains("follow") then
+          let values=str.Split '+'
+          if values.Length>1 then
+            let userNumberToFollow=values.[1] |> int
+            let mutable fSet :Set<int>=Set.empty.Add(userNumberToFollow)
+            serverRef<!MyFollowing (fSet,userNumber)
+            serverRef<!MyFollowers (fSet,userNumber)
+
+
         // else
         //   response <- sprintf "MARNEE MADE THIS response to %s" str
          
