@@ -1,0 +1,8 @@
+{
+  "runtimeOptions": {
+    "additionalProbingPaths": [
+      "/Users/uditjaitly/.dotnet/store/|arch|/|tfm|",
+      "/Users/uditjaitly/.nuget/packages"
+    ]
+  }
+}
