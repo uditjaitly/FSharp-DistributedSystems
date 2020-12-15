@@ -47,6 +47,8 @@ let join (p:Map<'a,'b>) (q:Map<'a,'b>) =
 let mutable registry :Map<int,bool>=Map.empty
 let mutable numberAndPassword :Map<int,string>=Map.empty 
 let mutable numberAndWebsocket :Map<int,WebSocket>=Map.empty
+let mutable userNumbers: List<int>=List.empty
+let mutable webSockets: List<WebSocket>=List.empty
 let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
 let mutable myFollowers :Map<int,Set<int>>=Map.empty
 let mutable tweets :Map<int,List<string>>=Map.empty
@@ -143,6 +145,8 @@ let Server numUsers (mailbox: Actor<_>) =
         //                 let mutable temp=pendingTweets.[sub]
         //                 temp<-[tweet] |> List.append temp
         //                 pendingTweets<-pendingTweets.Add(sub,temp)
+                
+            
                 //printfn "%i" sub
         //printfn "%A" tweets
         //printfn "%A" hashTags
@@ -290,8 +294,10 @@ let serverRef=
   |> spawn system "server"
 
 
-let mutable userNumber= -1
+
 let ws (webSocket : WebSocket) (context: HttpContext) =
+  printfn  "HERE"
+  let mutable userNumber= -1
   socket {
     // if `loop` is set to false, the server will stop receiving messages
     let mutable loop = true
@@ -347,12 +353,22 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
             if numberAndPassword.ContainsKey(userNumber) then
               if numberAndPassword.[userNumber]=password then
                 registry<-registry.Add(int userNumber,true)
-                response <- sprintf "LOGIN SUCCESSFULL %s" str
+                
+                response <- sprintf "LOGIN SUCCESSFULL: Tweets of users it follows are=" 
+                if iAmFollowing.ContainsKey(userNumber) then
+                  for sub in iAmFollowing.[userNumber] do
+                    response<-sprintf "%s" (response+System.String.Concat(tweets.[sub]))
+
               else
                 response <- sprintf "INCORRECT PASSWORD %s" str
             else
               response <- sprintf "USERNUMBER NOT REGISTERED %s" str
-
+        else if str.Contains("searchUser") then
+          let values=str.Split '+'
+          let userNameToSearch=values.[1]|> int
+          if(tweets.ContainsKey(userNameToSearch)) then
+            let t1=String.Concat(tweets.[userNameToSearch])
+            response<-sprintf "Tweets for %i are %s" userNameToSearch  t1
 
         else if str.Contains("follow") then
           let values=str.Split '+'
@@ -370,25 +386,37 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
         else if str.Contains("tweet") then
           let values=str.Split '+'
           if values.Length>1 then
-            let userNum=values.[1] |> int
+            let userNum=userNumber
             let tweet=values.[2]
             response <- sprintf "Tweet sent %s" str
             serverRef<? Tweet(userNum,tweet)
             System.Threading.Thread.Sleep(100)
-            let tOne= tweets.[userNum]
-            let stringTweets=System.String.Concat(tOne)
-            response<-sprintf "MY TWEETS %s" stringTweets
-        
-            //<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST %s" stringTweets
+            
+            if myFollowers.ContainsKey(userNum) then
+              for sub in myFollowers.[userNum] do
+                if registry.[sub]=true then /////////////IF USER IS ONLINE////////////
+                  response<-sprintf "User %i tweeted %s" userNum tweet
+                  let byteResponse=
+                    response
+                    |>System.Text.Encoding.ASCII.GetBytes
+                    |>ByteSegment
+                  do! numberAndWebsocket.[sub].send Text byteResponse true
+                
+            
+
+            //response<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST %s" stringTweets
 
 
         else if str.Contains("ShowWallfeed") then
           let values = str.Split '+'
-          let userNum=values.[1] |> int
+          //let userNum=values.[1] |> int
+          let userNum=userNumber
           let tOne= tweets.[userNum]
           let stringTweets=System.String.Concat(tOne)
           response<-sprintf "MY TWEETS %s" stringTweets
           
+        else if str.Contains("Logout") then
+          registry<-registry.Add(int userNumber,false)
 
         // else
         //   response <- sprintf "MARNEE MADE THIS response to %s" str

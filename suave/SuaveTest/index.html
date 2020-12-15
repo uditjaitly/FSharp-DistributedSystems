@@ -35,6 +35,19 @@
 </div>
 
 <div>
+  <h1>Search user tweets</h1>
+
+  <form id="searchUser">
+      <label for="usernameSearch">Search Username:</label><br>
+      <input type="text" id="usernameSearch" name="usernameSearch"><br>
+
+      
+
+      <input type="submit"></button>
+  </form>
+</div>
+
+<div>
   <h1>Usernumber to follow</h1>
 
   <form id="follow">
@@ -68,6 +81,13 @@
       
 </div>
 
+<div>
+  <h1>Logout</h1>
+
+  <button id="logout" onclick="handleLogout()">Logout</button>
+      
+</div>
+
 
 <script language="javascript" type="text/javascript">
 
@@ -84,6 +104,13 @@
       event.preventDefault();
       doSend("login"+ "+" + formLogin.elements['username'].value + "+" + formLogin.elements['password'].value)
 
+    })
+
+    let formSearchUser=document.getElementById('searchUser');
+
+    formSearchUser.addEventListener('submit',(event)=>{
+      event.preventDefault();
+      doSend("searchUser"+ "+" + formSearchUser.elements['usernameSearch'].value)
     })
 
     let formFollow=document.getElementById('follow');
@@ -111,10 +138,16 @@
 
 
 
+
     function handleWallFeed()
     {
       writeToScreen("button pressed")
       doSend("ShowWallfeed"+ "+" + formFollow.elements['username'].value)
+    }
+    function handleLogout()
+    {
+      writeToScreen("button pressed")
+      doSend("Logout")
     }
 
 
