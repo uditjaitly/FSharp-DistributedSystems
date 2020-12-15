@@ -94,7 +94,7 @@ let Server numUsers (mailbox: Actor<_>) =
             let mutable temp=tweets.[userName]
             temp<- [tweet] |> List.append temp
             tweets<-tweets.Add(userName,temp)
-
+        printfn "%A" tweets
         
 
         
@@ -358,10 +358,37 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
           let values=str.Split '+'
           if values.Length>1 then
             let userNumberToFollow=values.[1] |> int
-            let mutable fSet :Set<int>=Set.empty.Add(userNumberToFollow)
-            serverRef<!MyFollowing (fSet,userNumber)
-            serverRef<!MyFollowers (fSet,userNumber)
+            let userNum=values.[2] |> int
+            if(numberAndWebsocket.ContainsKey(userNumberToFollow)) then
+              let mutable fSet :Set<int>=Set.empty.Add(userNumberToFollow)
+              serverRef<!MyFollowing (fSet,userNum)
+              serverRef<!MyFollowers (fSet,userNum)
+              response<-sprintf "FOLLOWED SUCCESSFULLY"
+            else
+              response<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST"
 
+        else if str.Contains("tweet") then
+          let values=str.Split '+'
+          if values.Length>1 then
+            let userNum=values.[1] |> int
+            let tweet=values.[2]
+            response <- sprintf "Tweet sent %s" str
+            serverRef<? Tweet(userNum,tweet)
+            System.Threading.Thread.Sleep(100)
+            let tOne= tweets.[userNum]
+            let stringTweets=System.String.Concat(tOne)
+            response<-sprintf "MY TWEETS %s" stringTweets
+        
+            //<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST %s" stringTweets
+
+
+        else if str.Contains("ShowWallfeed") then
+          let values = str.Split '+'
+          let userNum=values.[1] |> int
+          let tOne= tweets.[userNum]
+          let stringTweets=System.String.Concat(tOne)
+          response<-sprintf "MY TWEETS %s" stringTweets
+          
 
         // else
         //   response <- sprintf "MARNEE MADE THIS response to %s" str
