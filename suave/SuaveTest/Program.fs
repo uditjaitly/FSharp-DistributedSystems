@@ -47,6 +47,7 @@ let join (p:Map<'a,'b>) (q:Map<'a,'b>) =
 let mutable registry :Map<int,bool>=Map.empty
 let mutable numberAndPassword :Map<int,string>=Map.empty 
 let mutable numberAndWebsocket :Map<int,WebSocket>=Map.empty
+let mutable tweetIDAndTweet :Map<int,string>=Map.empty
 let mutable userNumbers: List<int>=List.empty
 let mutable webSockets: List<WebSocket>=List.empty
 let mutable iAmFollowing :Map<int,Set<int>>=Map.empty
@@ -284,7 +285,7 @@ let Server numUsers (mailbox: Actor<_>) =
     listen()
 
 
-
+let mutable tweetID=100
 
 
 
@@ -363,12 +364,26 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
                 response <- sprintf "INCORRECT PASSWORD %s" str
             else
               response <- sprintf "USERNUMBER NOT REGISTERED %s" str
+
+
+
         else if str.Contains("searchUser") then
           let values=str.Split '+'
           let userNameToSearch=values.[1]|> int
           if(tweets.ContainsKey(userNameToSearch)) then
             let t1=String.Concat(tweets.[userNameToSearch])
             response<-sprintf "Tweets for %i are %s" userNameToSearch  t1
+          else
+            response<-sprintf "No tweets found"
+
+        else if str.Contains("hashtagTweet") then
+          let values=str.Split '+'
+          let hashtagToSearch=values.[1]
+          if(hashTags.ContainsKey(hashtagToSearch)) then
+            let t1=String.Concat(hashTags.[hashtagToSearch])
+            response<-sprintf "Tweets having %s are %s" hashtagToSearch t1
+          else
+            response<-sprintf "No tweets found"
 
         else if str.Contains("follow") then
           let values=str.Split '+'
@@ -388,14 +403,20 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
           if values.Length>1 then
             let userNum=userNumber
             let tweet=values.[2]
+            let modifiedTweet=sprintf "{TweetStart ID=%i} %s {TweetEnd}" tweetID tweet
+            
+            tweetIDAndTweet<-tweetIDAndTweet.Add(tweetID,modifiedTweet)
+            tweetID<-tweetID+1
             response <- sprintf "Tweet sent %s" str
-            serverRef<? Tweet(userNum,tweet)
+            serverRef<? Tweet(userNum,modifiedTweet)
+            
+            
             System.Threading.Thread.Sleep(100)
             
             if myFollowers.ContainsKey(userNum) then
               for sub in myFollowers.[userNum] do
                 if registry.[sub]=true then /////////////IF USER IS ONLINE////////////
-                  response<-sprintf "User %i tweeted %s" userNum tweet
+                  response<-sprintf "User %i tweeted %s" userNum modifiedTweet
                   let byteResponse=
                     response
                     |>System.Text.Encoding.ASCII.GetBytes
@@ -406,6 +427,23 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
 
             //response<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST %s" stringTweets
 
+
+
+
+
+        else if str.Contains("rt") then
+          let values=str.Split '+'
+          let retweetID=values.[1]|>int
+          
+          if(tweetIDAndTweet.ContainsKey(retweetID)) then
+            let tweetToRetweet=tweetIDAndTweet.[retweetID]
+            let modifiedRetweet=sprintf "{TweetStart ID=%i} %s {--Retweet TweetEnd}" tweetID tweetToRetweet
+            tweetID<-tweetID+1
+            tweetIDAndTweet<-tweetIDAndTweet.Add(tweetID,modifiedRetweet)
+            response <- sprintf "Tweet sent %s" str
+            serverRef<? Tweet(userNumber,modifiedRetweet)
+          else
+            response <- sprintf "Tweet by ID not found"
 
         else if str.Contains("ShowWallfeed") then
           let values = str.Split '+'

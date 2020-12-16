@@ -48,6 +48,19 @@
 </div>
 
 <div>
+  <h1>Search tweets via #</h1>
+
+  <form id="hashtagTweet">
+      <label for="hashtagTweet">Enter # to search</label><br>
+      <input type="text" id="hashtagTweet" name="hashtagTweet"><br>
+
+      
+
+      <input type="submit"></button>
+  </form>
+</div>
+
+<div>
   <h1>Usernumber to follow</h1>
 
   <form id="follow">
@@ -61,11 +74,24 @@
 </div>
 
 <div>
-  <h1>Write your tweet here</h1>
+  <h1>Tweet</h1>
 
   <form id="tweet">
-      <label for="tweetField">Tweet:</label><br>
+      <label for="tweetField">Write your tweet:</label><br>
       <input type="text" id="tweetField" name="tweetField"><br>
+
+      
+
+      <input type="submit"></button>
+  </form>
+</div>
+
+<div>
+  <h1>Retweet</h1>
+
+  <form id="retweet">
+      <label for="retweet">Enter Tweet ID to retweet</label><br>
+      <input type="text" id="retweet" name="retweet"><br>
 
       
 
@@ -113,6 +139,13 @@
       doSend("searchUser"+ "+" + formSearchUser.elements['usernameSearch'].value)
     })
 
+    let formHashtagTweets=document.getElementById('hashtagTweet');
+
+    formHashtagTweets.addEventListener('submit',(event)=>{
+      event.preventDefault();
+      doSend("hashtagTweet"+ "+" + formHashtagTweets.elements['hashtagTweet'].value)
+    })
+
     let formFollow=document.getElementById('follow');
 
     formFollow.addEventListener('submit',(event)=>{
@@ -125,6 +158,15 @@
     tweetField.addEventListener('submit',(event)=>{
       event.preventDefault();
       doSend("tweet"+ "+" + formLogin.elements['username'].value + "+" + tweetField.elements['tweetField'].value)
+
+
+    })
+
+    let retweetField=document.getElementById('retweet');
+
+    retweetField.addEventListener('submit',(event)=>{
+      event.preventDefault();
+      doSend("rt"+ "+" + retweetField.elements['retweet'].value)
 
 
     })
