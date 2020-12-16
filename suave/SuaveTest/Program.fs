@@ -22,13 +22,18 @@ open FSharp.Json
 
  let system = System.create "MySystem" (Configuration.defaultConfig())
 type Command=
-    | RegisterUser of int
+    | RegisterUser of int*string*WebSocket
     | SendUpdate of string
     | MyFollowing of Set<int>*int
     | MyFollowers of Set<int>*int
+    | HandleTweet of int*string
+    | HandleLogin of int*string
+    | GetWallFeed of int
     | Tweet of int*string
+    | HandleLogout of int
+    | UpdateFollow of int*int
     | GenerateTweet of int
-    | Retweet of int
+    | Retweet of int*int
     | QueryByUsername of int*int
     | QueryReplyOfUsername of int*int*List<string>
     | QueryByHashtag of int*string
@@ -41,7 +46,8 @@ type Command=
     | SelectedUserToObserve of int
     | WallUpdated of int
     | TweetAliveUsers
-
+let pathToSelf="akka://MySystem/user/server"
+let userRef=select pathToSelf system
 let join (p:Map<'a,'b>) (q:Map<'a,'b>) = 
     Map(Seq.concat [ (Map.toSeq p) ; (Map.toSeq q) ])
 let mutable registry :Map<int,bool>=Map.empty
@@ -57,6 +63,17 @@ let mutable hashTags :Map<string,List<string>>=Map.empty
 let mutable queryData :List<string>=List.empty
 let mutable pendingTweets : Map<int, List<string>>= Map.empty
 let mutable disconnectedUsers=0
+let mutable tweetID=100
+
+let wsForSending (webSocket : WebSocket, res:String)=
+  printfn "%s" res
+
+  let mutable sendMessage=res
+  let byteMessage=
+    sendMessage
+    |>System.Text.Encoding.ASCII.GetBytes
+    |>ByteSegment
+  webSocket.send Text byteMessage true
 
 let Server numUsers (mailbox: Actor<_>) =
     let mutable initComplete=false
@@ -130,108 +147,133 @@ let Server numUsers (mailbox: Actor<_>) =
                     temp<-[tweet] |> List.append temp
                     tweets<-tweets.Add(mentionedUser,temp)
 
-        //////////Send tweet to the people who are following me and are online///////////////
-        // if myFollowers.ContainsKey(userName) then
-        //     for sub in myFollowers.[userName] do
-        //         if registry.[sub]=true then
-        //             let pathToUser="akka://MySystem/user/"+ string sub
-        //             //let userRef=select pathToUser Global.GlobalVar.system
-        //             userRef<! TweetUpdate (userName,tweet)
-        //         else 
-        //             //printfn "HERESAY"
-        //             if not(pendingTweets.ContainsKey(sub)) then              ///If not online store in pending tweets/////
-        //                 let temp=[tweet]
-        //                 pendingTweets<-pendingTweets.Add(sub,temp)
-        //             else
-        //                 let mutable temp=pendingTweets.[sub]
-        //                 temp<-[tweet] |> List.append temp
-        //                 pendingTweets<-pendingTweets.Add(sub,temp)
-                
-            
-                //printfn "%i" sub
-        //printfn "%A" tweets
-        //printfn "%A" hashTags
-
-    // ///////////////HANDLE RETWEETS////////////////
-    // let doRetweet(username:int) =
-    //     if iAmFollowing.ContainsKey(username) && iAmFollowing.[username].Count>0 then
-            
-    //         let followSet=iAmFollowing.[username]
-    //         let followArray=Set.toArray(followSet)
-            
-    //         //let selectedUserToRt=followArray.[rand.Next()%followArray.Length]
-    //         if(tweets.ContainsKey(selectedUserToRt)) then
-    //             let userTweets=tweets.[selectedUserToRt]
-
-    //            // let selectedTweetToRt=userTweets.[rand.Next()%userTweets.Length]
-    //             let modifiedRt=selectedTweetToRt + " ---Retweet by user " + string username
-    //             if myFollowers.ContainsKey(username) then
-    //                 for sub in myFollowers.[username] do
-    //                     if registry.[sub]=true then                         //////// Check if the user is online, if yes, send tweet///
-    //                         let pathToUser="akka://MySystem/user/"+ string sub
-    //                     //    let userRef=select pathToUser Global.GlobalVar.system
-    //                         userRef<! TweetUpdate (username,modifiedRt)
-    //                     else
-                            
-    //                         if not(pendingTweets.ContainsKey(sub)) then              ///If not online store in pending tweets/////
-    //                             let temp=[modifiedRt]
-    //                             pendingTweets<-pendingTweets.Add(sub,temp)
-    //                         else
-    //                             let mutable temp=pendingTweets.[sub]
-    //                             temp<-[modifiedRt] |> List.append temp
-    //                             pendingTweets<-pendingTweets.Add(sub,temp)
-
-
-
-
-
-
-
-
-
-                // if not(tweets.ContainsKey(username)) then
-                //             let temp=[modifiedRt]
-                //             tweets<-tweets.Add(username,temp)
-                //          else
-                //             let mutable temp=tweets.[username]
-                //             temp<-[modifiedRt] |> List.append temp
-                //             tweets<-tweets.Add(username,temp)
-        //printfn "%A" tweets
-
+        
     /////////////HANDLE QUERY BY USERNAME///////////////
-    let handleQueryByUsername(myUsername:int,subUsername:int)=
-        if tweets.ContainsKey(subUsername) then
-            queryData<-tweets.[subUsername]
+    let handleQueryByUsername(userNumber:int,userNumToSearch:int)=
+        let mutable res=""
+        if(tweets.ContainsKey(userNumToSearch)) then
+            let t1=String.Concat(tweets.[userNumToSearch])
+            res<-sprintf "Tweets for %i are %s" userNumToSearch  t1
+        else
+            res<-sprintf "No tweets found"
+        Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
     
     /////////////HANDLE QUERY BY HASHTAG//////
-    let handleQueryByHashtag(userName:int,hashtagString:string)=
-        if hashTags.ContainsKey(hashtagString) then
-            queryData<-hashTags.[hashtagString]
+    let handleQueryByHashtag(userNumber:int,hashtagToSearch:string)=
+      let mutable res=""
+      if(hashTags.ContainsKey(hashtagToSearch)) then
+            let t1=String.Concat(hashTags.[hashtagToSearch])
+            res<-sprintf "Tweets having %s are %s" hashtagToSearch t1
+      else
+            res<-sprintf "No tweets found"
+      Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
+
+
+    let handleRegister(userNumber:int,password:string,webSocket:WebSocket)=
+      let mutable res=""
+      if(numberAndPassword.ContainsKey(userNumber)) then
+          res<- "USER NUMBER ALREADY REGISTERED"
+      else
+               numberAndPassword<-numberAndPassword.Add(userNumber,password)
+            //    registry<-registry.Add(int userNumber,true)
+               numberAndWebsocket<-numberAndWebsocket.Add(userNumber,webSocket)
+               res <-  "SIGN UP SUCCESSFULL "
+
+      Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
+
+
+    let handleLogin(userNumber:int,password:string) =
+      let mutable res=""
+      if numberAndPassword.ContainsKey(userNumber) then
+        if numberAndPassword.[userNumber]=password then
+          registry<-registry.Add(int userNumber,true)
+                
+          res <-  "LOGIN SUCCESSFULL: Tweets of users it follows are=" 
+          if iAmFollowing.ContainsKey(userNumber) then
+            for sub in iAmFollowing.[userNumber] do
+              res<-sprintf "%s" (res+System.String.Concat(tweets.[sub]))
+
         else
-            queryData<-["No tweets found containing the specified hashtag"]
+          res <- sprintf "INCORRECT PASSWORD " 
+      else
+        res <- sprintf "USERNUMBER NOT REGISTERED " 
+      Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
 
-    //////////////HANDLE LOGIN////////////////
-    //let handleLogIn(userName:int)=
-        // if pendingTweets.ContainsKey(userName) then
-        //     let pathToUser="akka://MySystem/user/"+ string userName
-        //     //let userRef=select pathToUser Global.GlobalVar.system
-        //     userRef<! TweetUpdateAfterLogin (userName,pendingTweets.[userName])
-        //     pendingTweets<-pendingTweets.Add(userName,[])
+    let handleFollow(userNumber:int,userNumberToFollow:int)=
+      let mutable res=""
+      if(numberAndWebsocket.ContainsKey(userNumberToFollow)) then
+        let mutable fSet :Set<int>=Set.empty.Add(userNumberToFollow)
+        
+    
+        userRef<!MyFollowing (fSet,userNumber)
+        userRef<!MyFollowers (fSet,userNumber)
+        res<-sprintf "FOLLOWED SUCCESSFULLY"
+      else
+        res<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST"
+      Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
 
+    let handleTweet(userNumber:int,tweet:string)=
+      let mutable res=""
+      let modifiedTweet=sprintf "{TweetStart ID=%i} %s {TweetEnd}" tweetID tweet
+            
+      tweetIDAndTweet<-tweetIDAndTweet.Add(tweetID,modifiedTweet)
+      tweetID<-tweetID+1
+      res <- sprintf "Tweet sent"
+      userRef<? Tweet(userNumber,modifiedTweet)
+
+      System.Threading.Thread.Sleep(100)
+      Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
+      if myFollowers.ContainsKey(userNumber) then
+        for sub in myFollowers.[userNumber] do
+          if registry.[sub]=true then /////////////IF USER IS ONLINE////////////
+            res<-sprintf "User %i tweeted %s" userNumber modifiedTweet
+            Async.RunSynchronously(wsForSending(numberAndWebsocket.[sub],res))
+            ()
+
+    let handleRetweet(userNumber:int,retweetID:int)=
+      let mutable res=""
+      if(tweetIDAndTweet.ContainsKey(retweetID)) then
+            let tweetToRetweet=tweetIDAndTweet.[retweetID]
+            let modifiedRetweet=sprintf "{TweetStart ID=%i} %s {--Retweet TweetEnd}" tweetID tweetToRetweet
+            tweetID<-tweetID+1
+            tweetIDAndTweet<-tweetIDAndTweet.Add(tweetID,modifiedRetweet)
+            res <- sprintf "Tweet sent " 
+            userRef<? Tweet(userNumber,modifiedRetweet)
+            Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
+      else
+            res <- sprintf "Tweet by ID not found"    
+            Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
+
+    let handleWallFeed (userNumber:int)=
+      let mutable res=""
+      if(tweets.ContainsKey(userNumber)) then
+            let tOne= tweets.[userNumber]
+            let stringTweets=System.String.Concat(tOne)
+            res<-sprintf "MY TWEETS %s" stringTweets
+      else
+            res<-sprintf "No Tweets Yet"
+      Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],res))
+
+
+      
+    
     let rec listen() =
             actor {
                 
                 let! message = mailbox.Receive()
                 let sender = mailbox.Sender()
                 match message with 
-                | RegisterUser user->
-                     registry<-registry.Add(user,true)
-
-                     sender<! SendUpdate "user registered"
+                | RegisterUser (user,password,webSocket)->
+                     handleRegister(user,password,webSocket)
+                     
                      //printfn "%A" registry
                      return! listen()
-                     
-                   
+                | HandleLogin (userNumber,password)->
+                  handleLogin(userNumber,password)
+                
+                | UpdateFollow (userNumber,userNumberToFollow)->
+                  handleFollow(userNumber,userNumberToFollow)
+
                 | MyFollowing (setOfSubscriptions,userName) ->
                     
                         //let k= updateMyFollowers(userName,myFollowersC) 
@@ -245,17 +287,25 @@ let Server numUsers (mailbox: Actor<_>) =
                         //         //let userRef=select pathUser Global.GlobalVar.system
                         //         userRef<! SendUpdate "updated my followers"
 
+                | HandleTweet (userNumber,tweet)->
+                  handleTweet(userNumber,tweet)
+                  
                 |Tweet (userName,tweet) ->
                     updateTweetRecord(userName,tweet)
-                | Retweet username->
-                    //doRetweet(username)
-                    sender<! SendUpdate "retweet complete for user"
-                | QueryByUsername (myUsername,subUsername) ->
-                    handleQueryByUsername(myUsername,subUsername)
-                    sender<! QueryReplyOfUsername (myUsername,subUsername,queryData)
+                | Retweet (userName,retweetID)->
+                    handleRetweet(userName,retweetID)
+                | QueryByUsername (userNumber,userNumToSearch) ->
+                    handleQueryByUsername(userNumber,userNumToSearch)
+                    
                 | QueryByHashtag (userName,hashtagString)->
                     handleQueryByHashtag (userName,hashtagString)
-                    sender<! QueryReplyOfHashtag(userName,hashtagString,queryData)
+                | GetWallFeed (userName) ->
+                  handleWallFeed(userName)
+
+                | HandleLogout(userNumber) ->
+                  registry<-registry.Add(int userNumber,false)
+                  Async.RunSynchronously(wsForSending(numberAndWebsocket.[userNumber],"Logged out"))
+
                 | DisconnectMe userName ->
                     registry<-registry.Add(userName,false)
                     disconnectedUsers<-disconnectedUsers+1
@@ -266,9 +316,7 @@ let Server numUsers (mailbox: Actor<_>) =
                 | Login userName->
                     registry<-registry.Add(userName,true)
                     
-                    printfn "User which logged in is :%i" userName
-                    //handleLogIn(userName)
-                    printfn "%A" registry
+      
                 
 
 
@@ -285,7 +333,7 @@ let Server numUsers (mailbox: Actor<_>) =
     listen()
 
 
-let mutable tweetID=100
+
 
 
 
@@ -296,36 +344,29 @@ let serverRef=
 
 
 
+
+
+
+
 let ws (webSocket : WebSocket) (context: HttpContext) =
-  printfn  "HERE"
+  
   let mutable userNumber= -1
   socket {
-    // if `loop` is set to false, the server will stop receiving messages
+    
     let mutable loop = true
 
     while loop do
-      // the server will wait for a message to be received without blocking the thread
+      
       let! msg = webSocket.read()
       printfn "%A" webSocket.send
       match msg with
-      // the message has type (Opcode * byte [] * bool)
-      //
-      // Opcode type:
-      //   type Opcode = Continuation | Text | Binary | Reserved | Close | Ping | Pong
-      //
-      // byte [] contains the actual message
-      //
-      // the last element is the FIN byte, explained later
+      
       | (Text, data, true) ->
-        // the message can be converted to a string
+
         let mutable response=""
         
 
-        let str = Encoding.UTF8.GetString data //UTF8Encoding.UTF8.ToString data
-        //let strNotJSON = Json.deseriaçlize<Foo> testjson
-        
-        
-        //let values = str.Split '+'
+        let str = Encoding.UTF8.GetString data 
         
         //printfn "%A" values
         if str.Contains("register") then                                    ////////////////REGISTRATION////////////////////
@@ -336,13 +377,8 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
             let password=values.[4]
             
             ()
-            if(numberAndPassword.ContainsKey(userNumber)) then
-               response<-sprintf "USER NUMBER ALREADY REGISTERED"
-            else
-               numberAndPassword<-numberAndPassword.Add(userNumber,password)
-            //    registry<-registry.Add(int userNumber,true)
-               numberAndWebsocket<-numberAndWebsocket.Add(userNumber,webSocket)
-               response <- sprintf "SIGN UP SUCCESSFULL %s" str
+            serverRef<! RegisterUser (userNumber,password,webSocket)
+             
 
 
         else if str.Contains("login") then
@@ -350,78 +386,41 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
           if values.Length>1 then
             userNumber<-values.[1] |> int
             let password=values.[2]
-
-            if numberAndPassword.ContainsKey(userNumber) then
-              if numberAndPassword.[userNumber]=password then
-                registry<-registry.Add(int userNumber,true)
-                
-                response <- sprintf "LOGIN SUCCESSFULL: Tweets of users it follows are=" 
-                if iAmFollowing.ContainsKey(userNumber) then
-                  for sub in iAmFollowing.[userNumber] do
-                    response<-sprintf "%s" (response+System.String.Concat(tweets.[sub]))
-
-              else
-                response <- sprintf "INCORRECT PASSWORD %s" str
-            else
-              response <- sprintf "USERNUMBER NOT REGISTERED %s" str
+            serverRef<! HandleLogin (userNumber,password)
+             
 
 
 
         else if str.Contains("searchUser") then
           let values=str.Split '+'
           let userNameToSearch=values.[1]|> int
-          if(tweets.ContainsKey(userNameToSearch)) then
-            let t1=String.Concat(tweets.[userNameToSearch])
-            response<-sprintf "Tweets for %i are %s" userNameToSearch  t1
-          else
-            response<-sprintf "No tweets found"
+          serverRef<!QueryByUsername(userNumber, userNameToSearch)
+          
 
         else if str.Contains("hashtagTweet") then
           let values=str.Split '+'
           let hashtagToSearch=values.[1]
-          if(hashTags.ContainsKey(hashtagToSearch)) then
-            let t1=String.Concat(hashTags.[hashtagToSearch])
-            response<-sprintf "Tweets having %s are %s" hashtagToSearch t1
-          else
-            response<-sprintf "No tweets found"
+          serverRef<!QueryByHashtag(userNumber,hashtagToSearch)
+          
 
         else if str.Contains("follow") then
           let values=str.Split '+'
           if values.Length>1 then
             let userNumberToFollow=values.[1] |> int
-            let userNum=values.[2] |> int
-            if(numberAndWebsocket.ContainsKey(userNumberToFollow)) then
-              let mutable fSet :Set<int>=Set.empty.Add(userNumberToFollow)
-              serverRef<!MyFollowing (fSet,userNum)
-              serverRef<!MyFollowers (fSet,userNum)
-              response<-sprintf "FOLLOWED SUCCESSFULLY"
-            else
-              response<-sprintf "USERNUMBER TO FOLLOW DOES NOT EXIST"
+            
+            serverRef<!UpdateFollow (userNumber,userNumberToFollow)
+            
 
         else if str.Contains("tweet") then
           let values=str.Split '+'
           if values.Length>1 then
             let userNum=userNumber
             let tweet=values.[2]
-            let modifiedTweet=sprintf "{TweetStart ID=%i} %s {TweetEnd}" tweetID tweet
-            
-            tweetIDAndTweet<-tweetIDAndTweet.Add(tweetID,modifiedTweet)
-            tweetID<-tweetID+1
-            response <- sprintf "Tweet sent %s" str
-            serverRef<? Tweet(userNum,modifiedTweet)
+            serverRef<! HandleTweet (userNum,tweet)
             
             
-            System.Threading.Thread.Sleep(100)
             
-            if myFollowers.ContainsKey(userNum) then
-              for sub in myFollowers.[userNum] do
-                if registry.[sub]=true then /////////////IF USER IS ONLINE////////////
-                  response<-sprintf "User %i tweeted %s" userNum modifiedTweet
-                  let byteResponse=
-                    response
-                    |>System.Text.Encoding.ASCII.GetBytes
-                    |>ByteSegment
-                  do! numberAndWebsocket.[sub].send Text byteResponse true
+            
                 
             
 
@@ -434,76 +433,38 @@ let ws (webSocket : WebSocket) (context: HttpContext) =
         else if str.Contains("rt") then
           let values=str.Split '+'
           let retweetID=values.[1]|>int
+          serverRef<! Retweet (userNumber,retweetID)
           
-          if(tweetIDAndTweet.ContainsKey(retweetID)) then
-            let tweetToRetweet=tweetIDAndTweet.[retweetID]
-            let modifiedRetweet=sprintf "{TweetStart ID=%i} %s {--Retweet TweetEnd}" tweetID tweetToRetweet
-            tweetID<-tweetID+1
-            tweetIDAndTweet<-tweetIDAndTweet.Add(tweetID,modifiedRetweet)
-            response <- sprintf "Tweet sent %s" str
-            serverRef<? Tweet(userNumber,modifiedRetweet)
-          else
-            response <- sprintf "Tweet by ID not found"
 
         else if str.Contains("ShowWallfeed") then
           let values = str.Split '+'
           //let userNum=values.[1] |> int
           let userNum=userNumber
-          let tOne= tweets.[userNum]
-          let stringTweets=System.String.Concat(tOne)
-          response<-sprintf "MY TWEETS %s" stringTweets
+          serverRef<!GetWallFeed userNum
+          
           
         else if str.Contains("Logout") then
-          registry<-registry.Add(int userNumber,false)
+          serverRef<!HandleLogout userNumber
 
-        // else
-        //   response <- sprintf "MARNEE MADE THIS response to %s" str
-         
+        // let byteResponse =
+        //   response
+        //   |> System.Text.Encoding.ASCII.GetBytes
+        //   |> ByteSegment
 
-        // the response needs to be converted to a ByteSegment
-        let byteResponse =
-          response
-          |> System.Text.Encoding.ASCII.GetBytes
-          |> ByteSegment
+        // // the `send` function sends a message back to the client
+        // do! webSocket.send Text byteResponse true
 
-        // the `send` function sends a message back to the client
-        do! webSocket.send Text byteResponse true
 
-      | (Close, _, _) ->
-        let emptyResponse = [||] |> ByteSegment
-        do! webSocket.send Close emptyResponse true
-
-        // after sending a Close message, stop the loop
-        loop <- false
 
       | _ -> ()
     }
 
-/// An example of explictly fetching websocket errors and handling them in your codebase.
-let wsWithErrorHandling (webSocket : WebSocket) (context: HttpContext) = 
-   
-   let exampleDisposableResource = { new IDisposable with member __.Dispose() = printfn "Resource needed by websocket connection disposed" }
-   let websocketWorkflow = ws webSocket context
-   
-   async {
-    let! successOrError = websocketWorkflow
-    match successOrError with
-    // Success case
-    | Choice1Of2() -> ()
-    // Error case
-    | Choice2Of2(error) ->
-        // Example error handling logic here
-        printfn "Error: [%A]" error
-        exampleDisposableResource.Dispose()
-        
-    return successOrError
-   }
+
 
 let app : WebPart = 
   choose [
     path "/websocket" >=> handShake ws
     // path "/websocketWithSubprotocol" >=> handShakeWithSubprotocol (chooseSubprotocol "test") ws
-    path "/websocketWithError" >=> handShake wsWithErrorHandling
     GET >=> choose [ path "/" >=> file "index.html"; browseHome ]
     NOT_FOUND "Found no handlers." ]
 

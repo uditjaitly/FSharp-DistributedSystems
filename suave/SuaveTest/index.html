@@ -9,7 +9,7 @@
         <input type="text" id="fname" name="fname"><br>
         <label for="lname">Last name:</label><br>
         <input type="text" id="lname" name="lname"><br>
-        <label for="username">Username:</label><br>
+        <label for="username">UserID:</label><br>
         <input type="text" id="username" name="username"><br>
         <label for="password">Password:</label><br>
         <input type="text" id="password" name="password">
@@ -24,7 +24,7 @@
   <h1>Login</h1>
 
   <form id="login">
-      <label for="username">Username:</label><br>
+      <label for="username">UserID:</label><br>
       <input type="text" id="username" name="username"><br>
       <label for="password">Password:</label><br>
       <input type="text" id="password" name="password">
@@ -38,7 +38,7 @@
   <h1>Search user tweets</h1>
 
   <form id="searchUser">
-      <label for="usernameSearch">Search Username:</label><br>
+      <label for="usernameSearch">Search UserID:</label><br>
       <input type="text" id="usernameSearch" name="usernameSearch"><br>
 
       
@@ -61,10 +61,10 @@
 </div>
 
 <div>
-  <h1>Usernumber to follow</h1>
+  <h1>UserID to follow</h1>
 
   <form id="follow">
-      <label for="username">Username:</label><br>
+      <label for="username">UserID:</label><br>
       <input type="text" id="username" name="username"><br>
 
       
@@ -215,8 +215,8 @@
    
   function onOpen(evt)
   {
-    writeToScreen("CONNECTED");
-    doSend("WebSocket rocks");
+    writeToScreen("USER CONNECTED TO TWITTER WEBSITE");
+    
   }
 
   function onClose(evt)
